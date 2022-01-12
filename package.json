@@ -1,0 +1,47 @@
+{
+  "name": "@typescript/analyze-trace",
+  "author": "Microsoft Corp.",
+  "homepage": "https://github.com/microsoft/typescript-analyze-trace#readme",
+  "version": "0.1.0",
+  "license": "MIT",
+  "description": "Analyze the output of tsc --generatetrace",
+  "keywords": [
+    "TypeScript",
+    "Microsoft",
+    "trace",
+    "generateTrace"
+  ],
+  "bugs": {
+    "url": "https://github.com/microsoft/typescript-analyze-trace/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/microsoft/typescript-analyze-trace.git"
+  },
+  "main": "./dist/analyze-trace-directory.js",
+  "typings": "./dist/analyze-trace-directory.d.ts",
+  "bin": {
+    "simplify-trace-types": "./bin/simplify-trace-types",
+    "print-trace-types": "./bin/print-trace-types",
+    "analyze-trace": "./bin/analyze-trace"
+  },
+  "scripts": {
+    "build": "tsc -p src"
+  },
+  "devDependencies": {
+    "@types/chalk": "^2.2.0",
+    "@types/node": "^14.18.5",
+    "@types/split2": "^3.2.1",
+    "@types/treeify": "^1.0.0",
+    "@types/yargs": "^16.0.4",
+    "typescript": "^4.5.4"
+  },
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "jsonstream-next": "^3.0.0",
+    "p-limit": "^3.1.0",
+    "split2": "^3.2.2",
+    "treeify": "^1.1.0",
+    "yargs": "^16.2.0"
+  }
+}
