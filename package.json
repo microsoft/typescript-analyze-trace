@@ -11,6 +11,9 @@
     "trace",
     "generateTrace"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "bugs": {
     "url": "https://github.com/microsoft/typescript-analyze-trace/issues"
   },
