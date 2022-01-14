@@ -16,7 +16,6 @@ steps:
 - task: CredScan@3
 - task: PoliCheck@2
 - task: AntiMalware@4
-- task: ComponentGovernanceComponentDetection@0
 - task: PublishSecurityAnalysisLogs@3
 - task: PostAnalysis@2
 - task: NodeTool@0
@@ -28,3 +27,5 @@ steps:
     npm ci
     npm run build
   displayName: 'npm install and build'
+
+- task: MicroBuildCleanup@1
