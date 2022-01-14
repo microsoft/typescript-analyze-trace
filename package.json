@@ -32,7 +32,6 @@
     "build": "tsc -p src"
   },
   "devDependencies": {
-    "@types/chalk": "^2.2.0",
     "@types/node": "^14.18.5",
     "@types/split2": "^3.2.1",
     "@types/treeify": "^1.0.0",
