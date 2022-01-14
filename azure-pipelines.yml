@@ -7,7 +7,7 @@ pr:
 - main
 
 pool:
-  vmImage: VSEngSS-MicroBuild2019-1ES
+  name: VSEngSS-MicroBuild2019-1ES
 
 steps:
 - task: NuGetToolInstaller@1
