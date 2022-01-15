@@ -1,3 +1,6 @@
+// Copyright (c) Microsoft Corporation.
+// Licensed under the MIT License.
+
 if (process.argv.length !== 3 && process.argv.length != 4) {
     const path = require("path");
     console.error(`Usage: ${path.basename(process.argv[0])} ${path.basename(process.argv[1])} trace_path [type_path]`);
@@ -397,7 +400,7 @@ function formatPath(p: string) {
 
 function unmangleCamelCase(name: string) {
     let result = "";
-    for (const char of [...<any>name]) {
+    for (const char of [...name]) {
         if (!result.length) {
             result += char.toLocaleUpperCase();
             continue;
