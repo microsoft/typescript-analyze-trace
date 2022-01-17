@@ -6,9 +6,9 @@ The repro can then be used as the basis of a bug report or a starting point for 
 
 ## Usage
 
-First, build your project with `--generateTrace traceDir`
+First, build your project with `tsc --generateTrace traceDir`
 
-For a sorted list of compilation hot-spots, run `npx analyze-trace traceDir`
+For a sorted list of compilation hot-spots, run `npx @typescript/analyze-trace traceDir`
 
 For a simplified view of a types file (useful when investigating an individual trace), run `npx simplify-trace-types traceDir\types.json output_path`
 
