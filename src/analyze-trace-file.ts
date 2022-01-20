@@ -243,13 +243,16 @@ async function getNormalizedPositions(root: EventSpan): Promise<PositionMap> {
         if (span.event?.name === "checkSourceFile") {
             currentFile = span.event!.args!.path;
         }
-        else if (currentFile && span.event?.cat === "check") {
+        else if (span.event?.cat === "check") {
             const args = span.event.args;
-            if (args?.pos) {
-                recordPosition(currentFile, args.pos);
-            }
-            if (args?.end) {
-                recordPosition(currentFile, -args.end); // Negative since end should not be moved past trivia
+            currentFile = args?.path ?? currentFile;
+            if (currentFile) {
+                if (args?.pos) {
+                    recordPosition(currentFile, args.pos);
+                }
+                if (args?.end) {
+                    recordPosition(currentFile, -args.end); // Negative since end should not be moved past trivia
+                }
             }
         }
 
@@ -303,8 +306,16 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
     // Sort slow to fast
     let childTree = {};
 
-    if (curr.event?.name === "checkSourceFile") {
-        currentFile = curr.event.args!.path;
+    let showCurrentFile = false;
+    if (curr.event?.cat === "check") {
+        const path = curr.event.args!.path;
+        if (path) {
+            showCurrentFile = path !== currentFile;
+            currentFile = path;
+        }
+        else {
+            assert(curr.event?.name !== "checkSourceFile", "checkSourceFile should have a path");
+        }
     }
 
     if (curr.children.length) {
@@ -347,13 +358,16 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
                 return `Determine variance of type ${event.args!.id}`;
             default:
                 if (event.cat === "check" && event.args && event.args.pos && event.args.end) {
+                    const currentFileClause = showCurrentFile
+                        ? ` in ${formatPath(currentFile!)}`
+                        : "";
                     if (positionMap.has(currentFile!)) {
                         const updatedPos = positionMap.get(currentFile!)!.get(event.args.pos.toString())!;
                         const updatedEnd = positionMap.get(currentFile!)!.get(event.args.end.toString())!;
-                        return `${unmangleCamelCase(event.name)} from (line ${updatedPos[0]}, char ${updatedPos[1]}) to (line ${updatedEnd[0]}, char ${updatedEnd[1]})`;
+                        return `${unmangleCamelCase(event.name)}${currentFileClause} from (line ${updatedPos[0]}, char ${updatedPos[1]}) to (line ${updatedEnd[0]}, char ${updatedEnd[1]})`;
                     }
                     else {
-                        return `${unmangleCamelCase(event.name)} from offset ${event.args.pos} to offset ${event.args.end}`;
+                        return `${unmangleCamelCase(event.name)}${currentFileClause} from offset ${event.args.pos} to offset ${event.args.end}`;
                     }
                 }
                 return undefined;
