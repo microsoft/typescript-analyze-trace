@@ -1,26 +1,28 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-if (process.argv.length !== 3) {
-    const path = require("path");
-    console.error(`Usage: ${path.basename(process.argv[0])} ${path.basename(process.argv[1])} trace_dir`);
-    process.exit(1);
-}
-
 import cp = require("child_process");
 import fs = require("fs");
 import os = require("os");
 import path = require("path");
 
 import plimit = require("p-limit");
+import yargs = require("yargs");
+
+import { commandLineOptions, checkCommandLineOptions, pushCommandLineOptions } from "./analyze-trace-options";
+
+const argv = yargs(process.argv.slice(2))
+    .command("$0 <traceDir>", "Preprocess tracing type dumps", yargs => yargs
+        .positional("traceDir", { type: "string", desc: "Directory of trace and types files", coerce: throwIfNotDirectory })
+        .options(commandLineOptions)
+        .check(checkCommandLineOptions)
+        .help("h").alias("h", "help")
+        .strict())
+    .argv;
+
 const limit = plimit(os.cpus().length);
 
-const traceDir = process.argv[2];
-
-if (!fs.existsSync(traceDir) || !fs.statSync(traceDir)?.isDirectory()) {
-    console.error(`${traceDir} is not a directory`);
-    process.exit(2);
-}
+const traceDir = argv.traceDir!;
 
 main().then(
     value => process.exit(value ? 0 : 3),
@@ -154,9 +156,10 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
     if (await isFile(project.typesPath)) {
         args.push(project.typesPath);
     }
+    pushCommandLineOptions(args, argv);
 
     return new Promise<ProjectResult>(resolve => {
-        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe", env: { FORCE_COLOR: '1' } });
+        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe" });
 
         let stdout = "";
         let stderr = "";
@@ -178,4 +181,11 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
 
 function isFile(path: string): Promise<boolean> {
     return fs.promises.stat(path).then(stats => stats.isFile()).catch(_ => false);
+}
+
+function throwIfNotDirectory(path: string): string {
+    if (!fs.existsSync(path) || !fs.statSync(path)?.isDirectory()) {
+        throw new Error(`${path} is not a directory`);
+    }
+    return path;
 }
