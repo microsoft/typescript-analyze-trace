@@ -156,10 +156,10 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
     if (await isFile(project.typesPath)) {
         args.push(project.typesPath);
     }
-    args.push("--force-millis", `${argv.forceMillis}`, "--skip-millis", `${argv.skipMillis}`);
+    args.push("--force-millis", `${argv.forceMillis}`, "--skip-millis", `${argv.skipMillis}`, argv.color ? "--color" : "--no-color");
 
     return new Promise<ProjectResult>(resolve => {
-        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe", env: { FORCE_COLOR: process.env["FORCE_COLOR"] ?? '1' } });
+        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe" });
 
         let stdout = "";
         let stderr = "";

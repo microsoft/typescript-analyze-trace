@@ -14,12 +14,18 @@ export const commandLineOptions = {
         type: "number",
         default: 100,
     },
+    "color": {
+        describe: "Color the output to make it easier to read",
+        type: "boolean",
+        default: true,
+    },
 } as const;
 
 // Replicating the type inference in yargs would be excessive
 type Argv = {
     forceMillis: number,
-    skipMillis: number
+    skipMillis: number,
+    color: boolean,
 };
 
 export function checkCommandLineOptions(argv: Argv): true {
