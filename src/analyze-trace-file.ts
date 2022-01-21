@@ -19,7 +19,7 @@ const argv = yargs(process.argv.slice(2))
         .options(commandLineOptions)
         .check(checkCommandLineOptions)
         .help("h").alias("h", "help")
-        .strict().skipValidation)
+        .strict())
     .argv;
 
 const Parser = require("jsonparse");
