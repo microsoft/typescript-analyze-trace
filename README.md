@@ -17,6 +17,10 @@ Note that the resulting file is for human consumption and should not be passed t
 
 To pretty-print individual types from a types file (faster than processing the entire file), run `npx print-types traceDir\types.json id+`.
 
+## Deployment
+
+To publish a new version of this package, change the version in `package.json` and push to main.
+
 ## Trademarks
 
 This project may contain trademarks or logos for projects, products, or services. Authorized use of Microsoft
