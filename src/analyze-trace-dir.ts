@@ -9,7 +9,7 @@ import path = require("path");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
-import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
+import { commandLineOptions, checkCommandLineOptions, pushCommandLineOptions } from "./analyze-trace-options";
 
 const argv = yargs(process.argv.slice(2))
     .command("$0 <traceDir>", "Preprocess tracing type dumps", yargs => yargs
@@ -156,7 +156,7 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
     if (await isFile(project.typesPath)) {
         args.push(project.typesPath);
     }
-    args.push("--force-millis", `${argv.forceMillis}`, "--skip-millis", `${argv.skipMillis}`, argv.color ? "--color" : "--no-color");
+    pushCommandLineOptions(args, argv);
 
     return new Promise<ProjectResult>(resolve => {
         const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe" });

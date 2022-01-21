@@ -34,3 +34,10 @@ export function checkCommandLineOptions(argv: Argv): true {
     }
     return true;
 }
+
+export function pushCommandLineOptions(array: string[], argv: Argv): void {
+    array.push(
+        "--force-millis", `${argv.forceMillis}`,
+        "--skip-millis", `${argv.skipMillis}`,
+        argv.color ? "--color" : "--no-color");
+}
