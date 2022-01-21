@@ -6,13 +6,16 @@ The repro can then be used as the basis of a bug report or a starting point for 
 
 ## Usage
 
-First, build your project with `--generateTrace traceDir`
+First, build your project with `--generateTrace traceDir`.  This will create a new `traceDir` directory with paired trace and types files.
 
-For a sorted list of compilation hot-spots, run `npx analyze-trace traceDir`
+For a sorted list of compilation hot-spots, run `npx analyze-trace traceDir`.
+Pass `--help` to learn more about configuration options.
+For best results, run the analyzer on a machine where the paths in the trace file(s) resolve correctly.
 
-For a simplified view of a types file (useful when investigating an individual trace), run `npx simplify-trace-types traceDir\types.json output_path`
+For a simplified view of a types file (useful when investigating an individual trace), run `npx simplify-trace-types traceDir\types.json output_path`.
+Note that the resulting file is for human consumption and should not be passed to the analyzer (i.e. don't clobber the original).
 
-To pretty-print individual types from a types file (faster than processing the entire file), run `npx print-types traceDir\types.json id+`
+To pretty-print individual types from a types file (faster than processing the entire file), run `npx print-types traceDir\types.json id+`.
 
 ## Trademarks
 
