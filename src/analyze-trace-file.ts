@@ -10,33 +10,14 @@ import yargs = require("yargs");
 
 import getTypeTree = require("./get-type-tree");
 import normalizePositions = require("./normalize-positions");
+import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
 
 const argv = yargs(process.argv.slice(2))
     .command("$0 <tracePath> [typesPath]", "Preprocess tracing type dumps", yargs => yargs
         .positional("tracePath", { type: "string", desc: "Trace file to read", coerce: throwIfNotFile })
         .positional("typesPath", { type: "string", desc: "Corresponding types file", coerce: throwIfNotFile })
-        .options({
-            "forceMillis": {
-                alias: ["forcemillis", "force-millis"],
-                describe: "Events of at least this duration (in milliseconds) will reported unconditionally",
-                type: "number",
-                default: 500,
-
-            },
-            "skipMillis": {
-                alias: ["skipmillis", "skip-millis"],
-                describe: "Events of less than this duration (in milliseconds) will suppressed unconditionally",
-                type: "number",
-                default: 100,
-
-            },
-        })
-        .check(argv => {
-            if (argv.forceMillis < argv.skipMillis) {
-                throw new Error("forceMillis cannot be less than skipMillis")
-            }
-            return true;
-        })
+        .options(commandLineOptions)
+        .check(checkCommandLineOptions)
         .help("h").alias("h", "help")
         .strict().skipValidation)
     .argv;

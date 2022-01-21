@@ -9,34 +9,13 @@ import path = require("path");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
+import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
+
 const argv = yargs(process.argv.slice(2))
     .command("$0 <traceDir>", "Preprocess tracing type dumps", yargs => yargs
-        .positional("traceDir", { type: "string", desc: "Directory of trace and types files" })
-        .options({
-            "forceMillis": {
-                alias: ["forcemillis", "force-millis"],
-                describe: "Events of at least this duration (in milliseconds) will reported unconditionally",
-                type: "number",
-                default: 500,
-
-            },
-            "skipMillis": {
-                alias: ["skipmillis", "skip-millis"],
-                describe: "Events of less than this duration (in milliseconds) will suppressed unconditionally",
-                type: "number",
-                default: 100,
-
-            },
-        })
-        .check(argv => {
-            if (argv.traceDir && !fs.existsSync(argv.traceDir)) {
-                throw new Error(`${traceDir} is not a directory`)
-            }
-            if (argv.forceMillis < argv.skipMillis) {
-                throw new Error("forceMillis cannot be less than skipMillis")
-            }
-            return true;
-        })
+        .positional("traceDir", { type: "string", desc: "Directory of trace and types files", coerce: throwIfNotDirectory })
+        .options(commandLineOptions)
+        .check(checkCommandLineOptions)
         .help("h").alias("h", "help")
         .strict().skipValidation)
     .argv;
@@ -202,4 +181,11 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
 
 function isFile(path: string): Promise<boolean> {
     return fs.promises.stat(path).then(stats => stats.isFile()).catch(_ => false);
+}
+
+function throwIfNotDirectory(path: string): string {
+    if (!fs.existsSync(path) || !fs.statSync(path)?.isDirectory()) {
+        throw new Error(`${path} is not a directory`);
+    }
+    return path;
 }
