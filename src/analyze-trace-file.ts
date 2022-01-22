@@ -342,9 +342,9 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
             // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/2)
             // case "findSourceFile":
             //     return `Load file ${event.args!.fileName}`;
-            // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/3)
-            // case "emit":
-            //     return `Emit`;
+            case "emitDeclarationFileOrBundle":
+                const dtsPath = event.args.declarationFilePath;
+                return dtsPath && `Emit typings file ${formatPath(dtsPath)}`;
             case "checkSourceFile":
                 return `Check file ${formatPath(currentFile!)}`;
             case "structuredTypeRelatedTo":
