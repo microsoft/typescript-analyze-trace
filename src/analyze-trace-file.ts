@@ -11,6 +11,7 @@ import yargs = require("yargs");
 import getTypeTree = require("./get-type-tree");
 import normalizePositions = require("./normalize-positions");
 import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
+import countImportExpressions = require("./count-import-expressions");
 
 const argv = yargs(process.argv.slice(2))
     .command("$0 <tracePath> [typesPath]", "Preprocess tracing type dumps", yargs => yargs
@@ -30,6 +31,7 @@ const typesPath = argv.typesPath;
 const thresholdDuration = argv.forceMillis * 1000; // microseconds
 const minDuration = argv.skipMillis * 1000; // microseconds
 const minPercentage = 0.6;
+const importExpressionThreshold = 10;
 
 main().catch(err => console.error(`Internal Error: ${err.message}\n${err.stack}`));
 
@@ -326,7 +328,7 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
     }
 
     if (curr.event) {
-        const eventStr = eventToString();
+        const eventStr = await eventToString();
         if (eventStr) {
             let result = {};
             result[`${eventStr} (${Math.round((curr.end - curr.start) / 1000)}ms)`] = childTree;
@@ -336,15 +338,33 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
 
     return childTree;
 
-    function eventToString(): string | undefined {
+    async function eventToString(): Promise<string | undefined> {
         const event = curr.event!;
         switch (event.name) {
             // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/2)
             // case "findSourceFile":
             //     return `Load file ${event.args!.fileName}`;
-            // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/3)
-            // case "emit":
-            //     return `Emit`;
+            case "emitDeclarationFileOrBundle":
+                const dtsPath = event.args.declarationFilePath;
+                if (!dtsPath || !fs.existsSync(dtsPath)) {
+                    return undefined;
+                }
+                try {
+                    const sourceStream = fs.createReadStream(dtsPath, { encoding: "utf-8" });
+                    const frequency = await countImportExpressions(sourceStream);
+                    const sorted = Array.from(frequency.entries()).sort(([import1, count1], [import2, count2]) => count2 - count1 || import1.localeCompare(import2)).filter(([_, count]) => count >= importExpressionThreshold);
+                    if (sorted.length === 0) {
+                        return undefined;
+                    }
+                    for (const [imp, count] of sorted) {
+                        // Directly modifying childTree is pretty hacky
+                        childTree[`Consider adding \`${chalk.cyan(`import ${chalk.cyan(imp)}`)}\` which is used in ${count} places`] = {};
+                    }
+                    return `Emit declarations file ${formatPath(dtsPath)}`;
+                }
+                catch {
+                    return undefined;
+                }
             case "checkSourceFile":
                 return `Check file ${formatPath(currentFile!)}`;
             case "structuredTypeRelatedTo":
