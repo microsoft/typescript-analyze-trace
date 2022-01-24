@@ -360,7 +360,7 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
                         // Directly modifying childTree is pretty hacky
                         childTree[`Consider adding \`${chalk.cyan(`import ${chalk.cyan(imp)}`)}\` which is used in ${count} places`] = {};
                     }
-                    return `Emit typings file ${formatPath(dtsPath)}`;
+                    return `Emit declarations file ${formatPath(dtsPath)}`;
                 }
                 catch {
                     return undefined;
