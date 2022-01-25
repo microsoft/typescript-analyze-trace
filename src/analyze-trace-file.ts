@@ -32,6 +32,7 @@ const thresholdDuration = argv.forceMillis * 1000; // microseconds
 const minDuration = argv.skipMillis * 1000; // microseconds
 const minPercentage = 0.6;
 const importExpressionThreshold = 10;
+const sourceFileFanoutThreshold = 5;
 
 main().catch(err => console.error(`Internal Error: ${err.message}\n${err.stack}`));
 
@@ -52,6 +53,7 @@ interface EventSpan {
     start: number;
     end: number;
     children: EventSpan[];
+    droppedChildCount: number;
     typeTree?: any;
 }
 
@@ -91,12 +93,12 @@ function parse(tracePath: string): Promise<ParseResult> {
             let span: EventSpan;
             if (event.ph === "E") {
                 const beginEvent = unclosedStack.pop()!;
-                span = { event: beginEvent, start: +beginEvent.ts, end: +event.ts, children: [] };
+                span = { event: beginEvent, start: +beginEvent.ts, end: +event.ts, children: [], droppedChildCount: 0 };
             }
             else if (event.ph === "X") {
                 const start = +event.ts;
                 const duration = +event.dur!;
-                span = { event, start, end: start + duration, children: [] }
+                span = { event, start, end: start + duration, children: [], droppedChildCount: 0 }
             }
             else {
                 assert(false, `Unknown event phase ${event.ph}`);
@@ -106,7 +108,8 @@ function parse(tracePath: string): Promise<ParseResult> {
             minTime = Math.min(minTime, span.start);
             maxTime = Math.max(maxTime, span.end);
 
-            if ((span.end - span.start) >= minDuration) {
+            // Cleverness: preserve too-short parse events because we want to put more accurate counts in their parents
+            if ((span.end - span.start) >= minDuration || value.cat === "parse") {
                 spans.push(span);
             }
         }
@@ -133,7 +136,7 @@ async function main(): Promise<void> {
         while (unclosedStack.length) {
             const event = unclosedStack.pop()!;
             console.log(`> ${event.name}: ${JSON.stringify(event.args)}`);
-            spans.push({ event, start: +event.ts, end: maxTime, children: [] });
+            spans.push({ event, start: +event.ts, end: maxTime, children: [], droppedChildCount: 0 });
         }
 
         console.log();
@@ -141,7 +144,7 @@ async function main(): Promise<void> {
 
     spans.sort((a, b) => a.start - b.start);
 
-    const root: EventSpan = { start: minTime, end: maxTime, children: [] };
+    const root: EventSpan = { start: minTime, end: maxTime, children: [], droppedChildCount: 0 };
     const stack = [ root ];
 
     for (const span of spans) {
@@ -157,9 +160,12 @@ async function main(): Promise<void> {
 
         const parent = stack[i];
         const duration = span.end - span.start;
-        if (duration >= thresholdDuration || duration >= minPercentage * (parent.end - parent.start)) {
+        if (duration >= minDuration && (duration >= thresholdDuration || duration >= minPercentage * (parent.end - parent.start))) {
             parent.children.push(span);
             stack.push(span);
+        }
+        else {
+            parent.droppedChildCount++;
         }
     }
 
@@ -338,12 +344,19 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
 
     return childTree;
 
+    // NB: May alter childTree
     async function eventToString(): Promise<string | undefined> {
         const event = curr.event!;
         switch (event.name) {
             // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/2)
-            // case "findSourceFile":
-            //     return `Load file ${event.args!.fileName}`;
+            case "findSourceFile":
+                const childCount = curr.children.length + curr.droppedChildCount;
+                if (childCount < sourceFileFanoutThreshold) {
+                    return undefined;
+                }
+                childTree = {}; // Don't print the subtree since it will be moot if the suggestion is applied
+                childTree[`Consider using ${chalk.cyan("deep imports")} to avoid loading ${childCount}+ other files`] = {};
+                return `Load file ${formatPath(event.args!.fileName)}`;
             case "emitDeclarationFileOrBundle":
                 const dtsPath = event.args.declarationFilePath;
                 if (!dtsPath || !fs.existsSync(dtsPath)) {
@@ -357,7 +370,6 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
                         return undefined;
                     }
                     for (const [imp, count] of sorted) {
-                        // Directly modifying childTree is pretty hacky
                         childTree[`Consider adding \`${chalk.cyan(`import ${chalk.cyan(imp)}`)}\` which is used in ${count} places`] = {};
                     }
                     return `Emit declarations file ${formatPath(dtsPath)}`;
