@@ -160,7 +160,7 @@ async function main(): Promise<void> {
 
         const parent = stack[i];
         const duration = span.end - span.start;
-        if (duration >= minDuration && (duration >= thresholdDuration || duration >= minPercentage * (parent.end - parent.start))) {
+        if (duration >= minDuration && (duration >= thresholdDuration || (span.event?.cat !== "program" && duration >= minPercentage * (parent.end - parent.start)))) {
             parent.children.push(span);
             stack.push(span);
         }
@@ -350,13 +350,14 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
         switch (event.name) {
             // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/2)
             case "findSourceFile":
+                const sourcePath = event.args!.fileName;
                 const childCount = curr.children.length + curr.droppedChildCount;
-                if (childCount < sourceFileFanoutThreshold) {
+                if (childCount < sourceFileFanoutThreshold || !/node_modules/.test(sourcePath) || /@types\/node/.test(sourcePath)) {
                     return undefined;
                 }
                 childTree = {}; // Don't print the subtree since it will be moot if the suggestion is applied
                 childTree[`Consider using ${chalk.cyan("deep imports")} to avoid loading ${childCount}+ other files`] = {};
-                return `Load file ${formatPath(event.args!.fileName)}`;
+                return `Load file ${formatPath(sourcePath)}`;
             case "emitDeclarationFileOrBundle":
                 const dtsPath = event.args.declarationFilePath;
                 if (!dtsPath || !fs.existsSync(dtsPath)) {
