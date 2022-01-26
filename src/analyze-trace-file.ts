@@ -33,6 +33,8 @@ const minDuration = argv.skipMillis * 1000; // microseconds
 const minPercentage = 0.6;
 const importExpressionThreshold = 10;
 
+const packageNameRegex = /\/node_modules\/((?:[^@][^/]+)|(?:@[^/]+\/[^/]+))/g;
+
 main().catch(err => console.error(`Internal Error: ${err.message}\n${err.stack}`));
 
 type LineChar = normalizePositions.LineChar;
@@ -60,6 +62,7 @@ interface ParseResult {
     maxTime: number;
     spans: EventSpan[];
     unclosedStack: Event[];
+    nodeModulePaths: Map<string, string[]>;
 }
 
 function parse(tracePath: string): Promise<ParseResult> {
@@ -70,6 +73,7 @@ function parse(tracePath: string): Promise<ParseResult> {
         let maxTime = 0;
         const unclosedStack: Event[] = []; // Sorted in increasing order of start time (even when below timestamp resolution)
         const spans: EventSpan[] = []; // Sorted in increasing order of end time, then increasing order of start time (even when below timestamp resolution)
+        const nodeModulePaths = new Map<string, string[]>();
         p.onValue = function (value: any) {
             if (this.stack.length !== 1) return;
             assert(this.mode === Parser.C.ARRAY, `Unexpected mode ${this.mode}`);
@@ -106,6 +110,28 @@ function parse(tracePath: string): Promise<ParseResult> {
             minTime = Math.min(minTime, span.start);
             maxTime = Math.max(maxTime, span.end);
 
+            // Note that we need to do this before events are being dropped based on `minDuration`
+            if (span.event!.name === "findSourceFile") {
+                const path = span.event!.args?.fileName;
+                if (path) {
+                    while (true) {
+                        const m = packageNameRegex.exec(path);
+                        if (!m) break;
+                        const packageName = m[1];
+                        const packagePath = m.input.substring(0, m.index + m[0].length);
+                        if (nodeModulePaths.has(packageName)) {
+                            const paths = nodeModulePaths.get(packageName);
+                            if (paths!.indexOf(packagePath) < 0) { // Usually contains exactly one element
+                                paths!.push(packagePath);
+                            }
+                        }
+                        else {
+                            nodeModulePaths.set(packageName, [ packagePath ]);
+                        }
+                    }
+                }
+            }
+
             if ((span.end - span.start) >= minDuration) {
                 spans.push(span);
             }
@@ -117,15 +143,16 @@ function parse(tracePath: string): Promise<ParseResult> {
             resolve({
                 minTime,
                 maxTime,
-                spans: spans,
-                unclosedStack: unclosedStack,
+                spans,
+                unclosedStack,
+                nodeModulePaths,
             });
         });
     });
 }
 
 async function main(): Promise<void> {
-    const { minTime, maxTime, spans, unclosedStack } = await parse(tracePath);
+    const { minTime, maxTime, spans, unclosedStack, nodeModulePaths } = await parse(tracePath);
 
     if (unclosedStack.length) {
         console.log("Trace ended unexpectedly");
@@ -164,6 +191,40 @@ async function main(): Promise<void> {
     }
 
     await printHotStacks(root);
+    console.log();
+    await printDuplicateNodeModules(nodeModulePaths);
+}
+
+async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>): Promise<void> {
+    const tree = {};
+    let sawDuplicate = false;
+    const sorted = Array.from(nodeModulePaths.entries()).sort(([n1,p1], [n2,p2]) => p2.length - p1.length || n1.localeCompare(n2));
+    for (const [packageName, packagePaths] of sorted) {
+        if (packagePaths.length < 2) continue;
+        sawDuplicate = true;
+        const packageTree = {};
+        for (const packagePath of packagePaths.sort((p1, p2) => p1.localeCompare(p2))) {
+            let version: string | undefined;
+            try {
+                const jsonPath = path.join(packagePath, "package.json");
+                const jsonString = await fs.promises.readFile(jsonPath, { encoding: "utf-8" });
+                const jsonObj = JSON.parse(jsonString);
+                version = jsonObj.version;
+            }
+            catch {
+            }
+            packageTree[`${version ? `Version ${version}` : `Unknown version`} from ${packagePath}`] = {};
+        }
+        tree[packageName] = packageTree;
+    }
+
+    if (sawDuplicate) {
+        console.log("Duplicate packages");
+        console.log(treeify.asTree(tree, /*showValues*/ false, /*hideFunctions*/ true).trimEnd());
+    }
+    else {
+        console.log("No duplicate packages found");
+    }
 }
 
 async function printHotStacks(root: EventSpan): Promise<void> {
@@ -174,7 +235,7 @@ async function printHotStacks(root: EventSpan): Promise<void> {
     const tree = await makePrintableTree(root, /*currentFile*/ undefined, positionMap);
     if (Object.entries(tree).length) {
         console.log("Hot Spots");
-        console.log(treeify.asTree(tree, /*showValues*/ false, /*hideFunctions*/ true));
+        console.log(treeify.asTree(tree, /*showValues*/ false, /*hideFunctions*/ true).trimEnd());
     }
     else {
         console.log("No hot spots found")
