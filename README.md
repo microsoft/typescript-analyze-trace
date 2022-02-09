@@ -6,7 +6,9 @@ The repro can then be used as the basis of a bug report or a starting point for 
 
 ## Usage
 
-First, build your project with `--generateTrace traceDir`.  This will create a new `traceDir` directory with paired trace and types files.
+First, build your project with `tsc --generateTrace traceDir`.  This will create a new `traceDir` directory with paired trace and types files.
+
+Next, install `@typescript/analyze-trace` to make its various commands available in your project.
 
 For a sorted list of compilation hot-spots, run `npx analyze-trace traceDir`.
 Pass `--help` to learn more about configuration options.
