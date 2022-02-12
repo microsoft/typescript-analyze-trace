@@ -17,7 +17,7 @@ For best results, run the analyzer on a machine where the paths in the trace fil
 For a simplified view of a types file (useful when investigating an individual trace), run `npx simplify-trace-types traceDir\types.json output_path`.
 Note that the resulting file is for human consumption and should not be passed to the analyzer (i.e. don't clobber the original).
 
-To pretty-print individual types from a types file (faster than processing the entire file), run `npx print-types traceDir\types.json id+`.
+To pretty-print individual types from a types file (faster than processing the entire file), run `npx print-trace-types traceDir\types.json id+`.
 
 ## Deployment
 
