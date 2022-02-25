@@ -20,6 +20,7 @@ const argv = yargs(process.argv.slice(2))
         .options(commandLineOptions)
         .check(checkCommandLineOptions)
         .help("h").alias("h", "help")
+        .epilog("Exits with code 0 if highlights were found, 1 if no highlights were found, and 2 if an error occurred")
         .strict())
     .argv;
 
@@ -35,7 +36,10 @@ const importExpressionThreshold = 10;
 
 const packageNameRegex = /\/node_modules\/((?:[^@][^/]+)|(?:@[^/]+\/[^/]+))/g;
 
-main().catch(err => console.error(`Internal Error: ${err.message}\n${err.stack}`));
+reportHighlights().then(found => process.exit(found ? 0 : 1)).catch(err => {
+    console.error(`Internal Error: ${err.message}\n${err.stack}`)
+    process.exit(2);
+});
 
 type LineChar = normalizePositions.LineChar;
 type PositionMap = Map<string, Map<string, LineChar>>; // Path to position (offset or LineChar) to LineChar
@@ -151,7 +155,7 @@ function parse(tracePath: string): Promise<ParseResult> {
     });
 }
 
-async function main(): Promise<void> {
+async function reportHighlights(): Promise<boolean> {
     const { minTime, maxTime, spans, unclosedStack, nodeModulePaths } = await parse(tracePath);
 
     if (unclosedStack.length) {
@@ -190,12 +194,14 @@ async function main(): Promise<void> {
         }
     }
 
-    await printHotStacks(root);
+    const sawHotspots = await printHotStacks(root);
     console.log();
-    await printDuplicateNodeModules(nodeModulePaths);
+    const sawDuplicates = await printDuplicateNodeModules(nodeModulePaths);
+
+    return sawHotspots || sawDuplicates;
 }
 
-async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>): Promise<void> {
+async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>): Promise<boolean> {
     const tree = {};
     let sawDuplicate = false;
     const sorted = Array.from(nodeModulePaths.entries()).sort(([n1,p1], [n2,p2]) => p2.length - p1.length || n1.localeCompare(n2));
@@ -225,21 +231,26 @@ async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>)
     else {
         console.log("No duplicate packages found");
     }
+
+    return sawDuplicate;
 }
 
-async function printHotStacks(root: EventSpan): Promise<void> {
+async function printHotStacks(root: EventSpan): Promise<boolean> {
     if (typesPath) {
         await addTypeTrees(root);
     }
     const positionMap = await getNormalizedPositions(root);
     const tree = await makePrintableTree(root, /*currentFile*/ undefined, positionMap);
-    if (Object.entries(tree).length) {
+
+    const sawHotspots = Object.entries(tree).length > 0;
+    if (sawHotspots) {
         console.log("Hot Spots");
         console.log(treeify.asTree(tree, /*showValues*/ false, /*hideFunctions*/ true).trimEnd());
     }
     else {
-        console.log("No hot spots found")
+        console.log("No hot spots found");
     }
+    return sawHotspots;
 }
 
 async function addTypeTrees(root: EventSpan): Promise<void> {
