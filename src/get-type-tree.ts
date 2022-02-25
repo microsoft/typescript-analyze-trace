@@ -3,15 +3,19 @@
 
 import simplify = require("./simplify-type");
 
-function getTypeTree(types: readonly object[], id: number): object {
+function getTypeTree(id: number, simplifiedTypes: Map<number, object>, types?: readonly object[]): object {
     const tree = {};
     addTypeToTree(tree, id, []);
     return tree;
 
     function addTypeToTree(tree: {}, id: any, ancestorIds: any[]): void {
         if (typeof id !== "number") return;
-        const type = simplify(types[id - 1]);
-        if (!type) return;
+        let type = simplifiedTypes.get(id);
+        if (!type) {
+            type = types && simplify(types[id - 1]);
+            if (!type) return;
+            simplifiedTypes.set(id, type);
+        }
 
         const children = {};
 

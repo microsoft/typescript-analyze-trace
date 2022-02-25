@@ -82,12 +82,65 @@ async function main(): Promise<number> {
         }
     }
 
-    return await analyzeProjects(projects);
+    const results = await Promise.all(projects.map(p => limit(analyzeProject, p)));
+    return argv.json
+        ? await printResultsAsJson(results)
+        : await printResultsAsText(results);
 }
 
-async function analyzeProjects(projects: readonly Project[]): Promise<number> {
-    const results = await Promise.all(projects.map(p => limit(analyzeProject, p)));
+async function printResultsAsJson(results: readonly ProjectResult[]): Promise<number> {
+    let sawHighlights = false;
+    const hadErrors: ProjectResult[] = [];
+    const hadNoErrors: (ProjectResult & { highlights: object })[] = [];
+    for (const result of results) {
+        if (result.stderr || result.signal) {
+            hadErrors.push(result);
+            continue;
+        }
 
+        if (result.exitCode) {
+            // 1 just indicates "no highlights"
+            if (result.exitCode !== 1) {
+                hadErrors.push(result);
+            }
+            continue;
+        }
+
+        try {
+            hadNoErrors.push({ ...result, highlights: JSON.parse(result.stdout) });
+            sawHighlights = true;
+        }
+        catch {
+            hadErrors.push({ ...result, stderr: "Failed to parse project result JSON" });
+        }
+    }
+
+    const json = {
+        errors: hadErrors.length === 0
+            ? undefined
+            : hadErrors.map(result => ({
+                ...result,
+                stdout: undefined,
+                stderr: undefined,
+                exitCode: result.exitCode || undefined,
+                message: result.stderr,
+            })),
+        results: hadNoErrors.map(result => ({
+            project: result.project,
+            highlights: result.highlights,
+        })),
+    };
+
+    console.log(JSON.stringify(json, undefined, 2));
+
+    return hadErrors.length > 0
+        ? 2
+        : sawHighlights
+            ? 0
+            : 1;
+}
+
+async function printResultsAsText(results: readonly ProjectResult[]): Promise<number> {
     const hadHighlights: (ProjectResult & { score: number })[] = [];
     const hadErrors: ProjectResult[] = [];
     for (const result of results) {
@@ -111,7 +164,7 @@ async function analyzeProjects(projects: readonly Project[]): Promise<number> {
     }
 
     let first = true;
-    const projectCount = projects.length;
+    const projectCount = results.length;
 
     // Break ties with trace paths for determinism
     hadHighlights.sort((a, b) => b.score - a.score || a.project.tracePath.localeCompare(b.project.tracePath) ); // Descending

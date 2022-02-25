@@ -25,6 +25,11 @@ export const commandLineOptions = {
         type: "boolean",
         default: true,
     },
+    "json": {
+        describe: "Produce JSON output for programmatic consumption (EXPERIMENTAL)",
+        type: "boolean",
+        default: false,
+    },
 } as const;
 
 // Replicating the type inference in yargs would be excessive
@@ -33,6 +38,7 @@ type Argv = {
     skipMillis: number,
     expandTypes: boolean,
     color: boolean,
+    json: boolean,
 };
 
 export function checkCommandLineOptions(argv: Argv): true {
@@ -47,5 +53,7 @@ export function pushCommandLineOptions(array: string[], argv: Argv): void {
         "--force-millis", `${argv.forceMillis}`,
         "--skip-millis", `${argv.skipMillis}`,
         argv.expandTypes ? "--expand-types" : "--no-expand-types",
-        argv.color ? "--color" : "--no-color");
+        argv.color ? "--color" : "--no-color",
+        argv.json ? "--json" : "--no-json",
+    );
 }
