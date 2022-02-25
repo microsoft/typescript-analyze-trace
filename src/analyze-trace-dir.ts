@@ -17,6 +17,7 @@ const argv = yargs(process.argv.slice(2))
         .options(commandLineOptions)
         .check(checkCommandLineOptions)
         .help("h").alias("h", "help")
+        .epilog("Exits with code 0 if highlights were found, 1 if no highlights were found, and 2 if an error occurred")
         .strict())
     .argv;
 
@@ -25,10 +26,10 @@ const limit = plimit(os.cpus().length);
 const traceDir = argv.traceDir!;
 
 main().then(
-    value => process.exit(value ? 0 : 3),
+    code => process.exit(code),
     err => {
         console.error(`Internal error: ${err.message}`);
-        process.exit(4);
+        process.exit(2);
     });
 
 interface Project {
@@ -45,7 +46,7 @@ interface ProjectResult {
     signal: NodeJS.Signals | undefined;
 }
 
-async function main(): Promise<boolean> {
+async function main(): Promise<number> {
     let projects: undefined | Project[];
 
     const legendPath = path.join(traceDir, "legend.json");
@@ -84,29 +85,37 @@ async function main(): Promise<boolean> {
     return await analyzeProjects(projects);
 }
 
-async function analyzeProjects(projects: readonly Project[]): Promise<boolean> {
+async function analyzeProjects(projects: readonly Project[]): Promise<number> {
     const results = await Promise.all(projects.map(p => limit(analyzeProject, p)));
 
-    const hadHotSpots: (ProjectResult & { score: number })[] = [];
+    const hadHighlights: (ProjectResult & { score: number })[] = [];
     const hadErrors: ProjectResult[] = [];
     for (const result of results) {
-        if (result.stderr || result.exitCode || result.signal) {
+        if (result.stderr || result.signal) {
             hadErrors.push(result);
+            continue;
+        }
+
+        if (result.exitCode) {
+            // 1 just indicates "no highlights"
+            if (result.exitCode !== 1) {
+                hadErrors.push(result);
+            }
             continue;
         }
 
         // First will be the largest, so only need to match one
         const match = result.stdout.match(/\((\d+)[ ]*ms\)/);
-        if (match) {
-            hadHotSpots.push({...result, score: +match[1] });
-        }
+        const score = match ? +match[1] : 0; // Treat all duplicates as tied for now
+        hadHighlights.push({...result, score });
     }
 
     let first = true;
     const projectCount = projects.length;
 
-    hadHotSpots.sort((a, b) => b.score - a.score); // Descending
-    for (const result of hadHotSpots) {
+    // Break ties with trace paths for determinism
+    hadHighlights.sort((a, b) => b.score - a.score || a.project.tracePath.localeCompare(b.project.tracePath) ); // Descending
+    for (const result of hadHighlights) {
         if (!first) console.log();
         first = false;
 
@@ -134,7 +143,7 @@ async function analyzeProjects(projects: readonly Project[]): Promise<boolean> {
         }
     }
 
-    const interestingCount = hadHotSpots.length + hadErrors.length;
+    const interestingCount = hadHighlights.length + hadErrors.length;
     if (interestingCount < projectCount) {
         if (!first) console.log();
         first = false;
@@ -142,7 +151,11 @@ async function analyzeProjects(projects: readonly Project[]): Promise<boolean> {
         console.log(`Found nothing in ${projectCount - interestingCount}${interestingCount ? " other" : ""} project(s)`);
     }
 
-    return hadErrors.length > 0;
+    return hadErrors.length > 0
+        ? 2
+        : hadHighlights.length > 0
+            ? 0
+            : 1;
 }
 
 function getProjectDescription(project: Project) {
