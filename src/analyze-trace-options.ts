@@ -14,6 +14,12 @@ export const commandLineOptions = {
         type: "number",
         default: 100,
     },
+    "expandTypes": {
+        alias: ["expandtypes", "expand-types"],
+        describe: "Color the output to make it easier to read",
+        type: "boolean",
+        default: true,
+    },
     "color": {
         describe: "Color the output to make it easier to read",
         type: "boolean",
@@ -25,6 +31,7 @@ export const commandLineOptions = {
 type Argv = {
     forceMillis: number,
     skipMillis: number,
+    expandTypes: boolean,
     color: boolean,
 };
 
@@ -39,5 +46,6 @@ export function pushCommandLineOptions(array: string[], argv: Argv): void {
     array.push(
         "--force-millis", `${argv.forceMillis}`,
         "--skip-millis", `${argv.skipMillis}`,
+        argv.expandTypes ? "--expand-types" : "--no-expand-types",
         argv.color ? "--color" : "--no-color");
 }

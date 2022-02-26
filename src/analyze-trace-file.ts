@@ -236,7 +236,7 @@ async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>)
 }
 
 async function printHotStacks(root: EventSpan): Promise<boolean> {
-    if (typesPath) {
+    if (typesPath && argv.expandTypes) {
         await addTypeTrees(root);
     }
     const positionMap = await getNormalizedPositions(root);
