@@ -16,7 +16,7 @@ export const commandLineOptions = {
     },
     "expandTypes": {
         alias: ["expandtypes", "expand-types"],
-        describe: "Color the output to make it easier to read",
+        describe: "Expand types when printing",
         type: "boolean",
         default: true,
     },
