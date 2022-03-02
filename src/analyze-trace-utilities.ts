@@ -52,7 +52,9 @@ export async function getNormalizedPositions(root: EventSpan, relatedTypes: Map<
     if (relatedTypes) {
         for (const type of relatedTypes.values()) {
             const location: any = (type as any).location;
-            recordPosition(location.path, [ location.line, location.char ]);
+            if (location) {
+                recordPosition(location.path, [ location.line, location.char ]);
+            }
         }
     }
 
