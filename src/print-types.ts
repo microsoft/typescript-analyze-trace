@@ -21,6 +21,7 @@ const types: any[] = JSON.parse(json);
 console.log(ids.map(id => printType(id)).join("\n"));
 
 function printType(id: number): string {
-    const tree = getTypeTree(types, id) as {};
+    const cache = new Map<number, object>();
+    const tree = getTypeTree(id, cache, types) as {};
     return treeify.asTree(tree, /*showValues*/ false, /*hideFunctions*/ true);
 }
