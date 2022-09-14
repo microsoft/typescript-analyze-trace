@@ -15,3 +15,7 @@ contact [opencode@microsoft.com](mailto:opencode@microsoft.com) with any additio
 ## Building
 
 To build, run `npm ci` to download the required packages and `npm run build` to compile.
+
+## Deployment
+
+To publish a new version of this package, change the version in `package.json` and push to main.
