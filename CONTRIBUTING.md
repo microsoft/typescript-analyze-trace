@@ -18,4 +18,4 @@ To build, run `npm ci` to download the required packages and `npm run build` to 
 
 ## Deployment
 
-To publish a new version of this package, change the version in `package.json` and push to main.
+To publish a new version of this package, change the version in `package.json` and merge the corresponding PR.

@@ -1,6 +1,6 @@
 # @typescript/analyze-trace
 
-A tool for analyzing the output of `tsc --generateTrace` in a fast and digestible way (rather than more involved diagnostics [here](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing).
+A tool for analyzing the output of `tsc --generateTrace` in a fast and digestible way (rather than more involved diagnostics [here](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)).
 
 Note: The goal is to identify clear-cut hot-spots and provide enough context to extract a small repro.
 The repro can then be used as the basis of a bug report or a starting point for manual code inspection or profiling.
@@ -12,12 +12,12 @@ The short version is to run these commands:
 ```sh
 tsc -p tsconfig.json --generateTrace traceDir
 npm install --no-save @typescript/analyze-trace
-npx analyze-trace
+npx analyze-trace traceDir
 ```
 
 Each of these commands do the following:
 
-1. First you will need to build your project with `--generateTrace` to a specific directory.
+1. First, build your project with `--generateTrace` targeting a specific directory.
    `tsc -p tsconfig.json --generateTrace traceDir` will create a new `traceDir` directory with paired trace and types files.
    If your configuration file is not `tsconfig.json`, you will need to adjust the command.
 2. Installing `@typescript/analyze-trace` makes its various commands available in your project.
@@ -43,7 +43,7 @@ Note that the resulting file is for human consumption and should not be passed t
 The `analyze-trace` output will try to highlight the most expensive portions of a compilation that it was able to measure (a.k.a. "hot spots").
 Each hot spot may have a breakdown of other contributing hot spots.
 
-`analyze-trace` will also try to point out when multiple versions of the same npm package was loaded and type-checked.
+`analyze-trace` will also try to point out when multiple versions of the same npm package were loaded and type-checked.
 
 Output currently looks like the following:
 
