@@ -42,9 +42,11 @@ Note that the resulting file is for human consumption and should not be passed t
 The `analyze-trace` output will try to highlight the most expensive portions of a compilation that it was able to measure (a.k.a. "hot spots").
 Each hot spot may have a breakdown of other contributing hot spots.
 
+#### Hot Spots
+
 `analyze-trace` will also try to point out when multiple versions of the same npm package were loaded and type-checked.
 
-Output currently looks like the following:
+Output may look like the following:
 
 ```
 Hot Spots
@@ -72,17 +74,35 @@ Message | Explanation
 
 Other messages correspond roughly to specific functions in the compiler, but are *typically* self-explanatory.
 
-The file names will be the first indicators of where to look.
-Often, type IDs are used in place of more precise (but often verbose) type names.
+File names will be the first indicators of where to look.
+Often, type IDs are used in place of more precise (but often verbose) type names, regardless of whether `--expandTypes` is on.
 The `types.json` file will provide a way to look these up.
+
+#### Duplicate Packages
+
+`analyze-trace` will point out instances of duplicate packages in `node_modules`.
+These can be caused by multiple projects in a mono-repo that use different versions of the same package, or possibly from dependencies in `node_modules` that all specify different versions a library.
+
+Duplicate packages may or may not be expected, but loading up multiple copies of a library can have negative effects on a build.
+For one, they add more time to TypeScript's parsing, binding, and possibly checking stages.
+Beyond that, duplicate copies of the same types may end up being passed around and compared to each other.
+Because these types don't share the same root identities, fewer optimizations can be made around them.
 
 ### Acting on Results
 
-Once you've found culprit code, it's worth trying to create a minimal version of this code to isolate issues and experiment.
+#### Hot Spots
+
+Once you've found the "culprit" code that's making your build slow, try to create a minimal version of this code to isolate the issue and experiment.
 In some cases you can try to rewrite or simplify your code, and [our team has a few suggestions for common issues here](https://github.com/microsoft/TypeScript/wiki/Performance#writing-easy-to-compile-code).
 If culprit code occurs in a library, it may be worth filing an issue with that library or sending a pull request to provide simplifications.
 
 If you believe you have a minimal isolated reproduction of the issue that might be worth optimizing in TypeScript itself, [you are encouraged to file an issue](https://github.com/microsoft/TypeScript/issues/new/choose).
+
+#### Duplicate Packages
+
+Updating projects within your monorepo to share the same dependencies may be one way to fix this issue.
+Updating your dependencies may be another, though it won't always be the case that the most up-to-date versions of your dependencies list their dependencies in a compatible way.
+If libraries you consume cannot be updated to list compatible dependency ranges, consider using [`overrides` in `package.json` for npm](https://docs.npmjs.com/cli/v8/configuring-npm/package-json#overrides) or [for pnpm](https://pnpm.io/package_json#pnpmoverrides), or [`resolutions` in `package.json` for Yarn](https://classic.yarnpkg.com/lang/en/docs/selective-version-resolutions/).
 
 ## Trademarks
 
