@@ -22,14 +22,16 @@ Each of these commands do the following:
 2. Installing `@typescript/analyze-trace` makes its various commands available in your project.
 3. Running `npx analyze-trace traceDir` outputs a sorted list of compilation hot-spots - places where TypeScript is taking a high amount of time.
 
-For best results, the analyzer should run on trace files that were generated in the same relative location.
-If the trace files fall out of date with your project, you may see different results.
+The analyzer tries to refer back to files from your project to provide better output, and uses relative paths to do so.
+If your project changed since running `tsc --generateTrace`, or you moved your trace output directory, then the tool's results may be misleading.
+For best results, re-run `--generateTrace` when files and dependencies are updated, and ensure the trace output is always in the same relative location with respect to the input project.
+
 You can run `npx analyze-trace --help` to find out about other options including:
 
 Option                    | Default | Description
 --------------------------|---------|-------------------------------------------------------------------------------
-`--skipMillis [number]`   | `100`   | Suppress events that take less than the specified number of milliseconds.
-`--forceMillis [number]`  | `500`   | Report all un-skipped events that take longer than the specified number of milliseconds.
+`--skipMillis [number]`   | `100`   | Suppress events that take less than the specified number of milliseconds. Reduce this value to see more output (maybe on faster machines), and increase it to reduce clutter.
+`--forceMillis [number]`  | `500`   | Report all un-skipped events that take longer than the specified number of milliseconds. Reduce it to reveal more potential hot-spots that the built-in heuristic will not flag. Note that `forceMillis` is always lower-bounded by `skipMillis`.
 `--color [boolean]`       | `true`  | Color the output to make it easier to read. Turn this off when redirecting output to a file.
 `--expandTypes [boolean]` | `true`  | Expand the names of types when printing them. Turn this off when types are too verbose.
 `--json [boolean]`        | `false` | *Experimental and unstable*: Produce JSON output for programmatic consumption.
@@ -68,9 +70,10 @@ Some common messages include the following:
 
 Message | Explanation
 --------|------------
-"Compare types 1234 and 5678" | TypeScript had to check whether non-trivial types with internal IDs `1234` and `5678` were related.
+"Compare types 1234 and 5678" | TypeScript had to check whether two types with internal IDs `1234` and `5678` were related.
 "Determine variance of type 1234" | TypeScript had to check whether a `Foo<T>` was compatible with a `Foo<U>`. Instead of calculating all the members of `Foo<T>` and `Foo<U>` and comparing them, calculating variance allows TypeScript to know whether in such cases, it can just relate `T` to `U`, or `U` to `T`. Variance calculation requires a few up-front comparisons to possibly save all future ones.
 "Emit declaration file" | Generating the declaration file for the current file took a while.
+"Consider adding `import "./some/import/path"` which is used in 1234 places" | TypeScript's `--declaration` emit needed to generate 1234 imports for `./some/import/path`. Consider directly importing this path so the type-checker can avoid emitting the same path over and over in the declaration file. Also consider using [explicit type annotations](https://github.com/microsoft/TypeScript/wiki/Performance#using-type-annotations) so the type-checker can avoid time calculating the best path to a module and how to best display the type at all.
 
 Other messages correspond roughly to specific functions in the compiler, but are *typically* self-explanatory.
 
