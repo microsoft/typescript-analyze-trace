@@ -111,7 +111,9 @@ If libraries you consume cannot be updated to list compatible dependency ranges,
 
 You may want to tweak the `--skipMillis` and `--forceMillis` options to uncover hot spots that `analyze-trace` may not reveal.
 
-You may also want to try [visualizing a performance trace](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)) if you have a preference for exploring a trace in a visual and interactive manner.
+You may also want to try [visualizing a performance trace](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)) for a more detailed view.
+Iterating between the `analyze-trace` tool and an interactive visualizer might be a helpful workflow.
+
 
 Reading up further on [the TypeScript compiler's performance diagnostics page](https://github.com/microsoft/TypeScript/wiki/Performance) may provide ideas and options for your team as well.
 
