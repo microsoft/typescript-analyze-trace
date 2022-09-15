@@ -10,29 +10,28 @@ The repro can then be used as the basis of a bug report or a starting point for 
 The short version is to run these commands:
 
 ```sh
-tsc -p tsconfig.json --generateTrace traceDir
+tsc -p path/to/tsconfig.json --generateTrace traceDir
 npm install --no-save @typescript/analyze-trace
 npx analyze-trace traceDir
 ```
 
 Each of these commands do the following:
 
-1. First, build your project with `--generateTrace` targeting a specific directory.
-   `tsc -p tsconfig.json --generateTrace traceDir` will create a new `traceDir` directory with paired trace and types files.
-   If your configuration file is not `tsconfig.json`, you will need to adjust the command.
+1. Building your project with `--generateTrace` targeting a specific directory (e.g.`tsc -p path/to/tsconfig.json --generateTrace traceDir`) will create a new `traceDir` directory with paired trace and types files.
+   Note that running with `-b`/`--build` mode works as well.
 2. Installing `@typescript/analyze-trace` makes its various commands available in your project.
 3. Running `npx analyze-trace traceDir` outputs a sorted list of compilation hot-spots - places where TypeScript is taking a high amount of time.
 
 For best results, the analyzer should run on trace files that were generated in the same relative location.
 If the trace files fall out of date with your project, you may see different results.
-https://github.com/microsoft/typescript-analyze-trace/issues/29
 You can run `npx analyze-trace --help` to find out about other options including:
 
 Option                    | Default | Description
 --------------------------|---------|-------------------------------------------------------------------------------
-`--skipMillis [number]`   | `100`   | Suppress events that take less than the specified number of milliseocnds
-`--color [boolean]`       | `true`  | Color the output to make it easier to read.
-`--expandTypes [boolean]` | `true`  | Expand the names of types when printing them.
+`--skipMillis [number]`   | `100`   | Suppress events that take less than the specified number of milliseconds.
+`--forceMillis [number]`  | `500`   | Report all un-skipped events that take longer than the specified number of milliseconds.
+`--color [boolean]`       | `true`  | Color the output to make it easier to read. Turn this off when redirecting output to a file.
+`--expandTypes [boolean]` | `true`  | Expand the names of types when printing them. Turn this off when types are too verbose.
 `--json [boolean]`        | `false` | *Experimental and unstable*: Produce JSON output for programmatic consumption.
 
 For a simplified view of a `types.json` file (useful when investigating an individual trace), you can run `npx simplify-trace-types traceDir/types.json output.txt`.
@@ -63,7 +62,7 @@ Hot Spots
 
 Each step here is annotated with check times (e.g. checking two types in lodash took over 500ms).
 
-Some common messages
+Some common messages include the following:
 
 Message | Explanation
 --------|------------
@@ -81,7 +80,7 @@ The `types.json` file will provide a way to look these up.
 
 Once you've found culprit code, it's worth trying to create a minimal version of this code to isolate issues and experiment.
 In some cases you can try to rewrite or simplify your code, and [our team has a few suggestions for common issues here](https://github.com/microsoft/TypeScript/wiki/Performance#writing-easy-to-compile-code).
-If culprit code occurs in a library, it may be worth filing an issue or sending a pull request to make the same simplifications.
+If culprit code occurs in a library, it may be worth filing an issue with that library or sending a pull request to provide simplifications.
 
 If you believe you have a minimal isolated reproduction of the issue that might be worth optimizing in TypeScript itself, [you are encouraged to file an issue](https://github.com/microsoft/TypeScript/issues/new/choose).
 
