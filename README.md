@@ -1,6 +1,6 @@
 # @typescript/analyze-trace
 
-A tool for analyzing the output of `tsc --generateTrace` in a fast and digestible way (rather than more involved diagnostics [here](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)).
+[`@typescript/analyze-trace`](https://github.com/microsoft/typescript-analyze-trace) is tool for analyzing the output of `tsc --generateTrace` in a fast and digestible way (rather than more involved diagnostics [here](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)).
 
 Note: The goal is to identify clear-cut hot-spots and provide enough context to extract a small repro.
 The repro can then be used as the basis of a bug report or a starting point for manual code inspection or profiling.
@@ -106,6 +106,14 @@ If you believe you have a minimal isolated reproduction of the issue that might 
 Updating projects within your monorepo to share the same dependencies may be one way to fix this issue.
 Updating your dependencies may be another, though it won't always be the case that the most up-to-date versions of your dependencies list their dependencies in a compatible way.
 If libraries you consume cannot be updated to list compatible dependency ranges, consider using [`overrides` in `package.json` for npm](https://docs.npmjs.com/cli/v8/configuring-npm/package-json#overrides) or [for pnpm](https://pnpm.io/package_json#pnpmoverrides), or [`resolutions` in `package.json` for Yarn](https://classic.yarnpkg.com/lang/en/docs/selective-version-resolutions/).
+
+#### Iterating on Results
+
+You may want to tweak the `--skipMillis` and `--forceMillis` options to uncover hot spots that `analyze-trace` may not reveal.
+
+You may also want to try [visualizing a performance trace](https://github.com/microsoft/TypeScript/wiki/Performance-Tracing)) if you have a preference for exploring a trace in a visual and interactive manner.
+
+Reading up further on [the TypeScript compiler's performance diagnostics page](https://github.com/microsoft/TypeScript/wiki/Performance) may provide ideas and options for your team as well.
 
 ## Trademarks
 
