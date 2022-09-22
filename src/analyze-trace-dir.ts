@@ -26,7 +26,7 @@ const limit = plimit(os.cpus().length);
 const traceDir = argv.traceDir!;
 
 main().then(
-    code => process.exit(code),
+    code => process.exitCode = code,
     err => {
         console.error(`Internal error: ${err.message}`);
         process.exit(2);
