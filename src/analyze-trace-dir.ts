@@ -22,7 +22,8 @@ const argv = yargs(process.argv.slice(2))
         .strict())
     .argv;
 
-const limit = plimit(os.cpus().length);
+// Try to leave one core free
+const limit = plimit(Math.max(1, os.cpus().length - 1));
 
 const traceDir = argv.traceDir!;
 
