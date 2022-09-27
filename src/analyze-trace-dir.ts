@@ -6,6 +6,7 @@ import fs = require("fs");
 import os = require("os");
 import path = require("path");
 
+import exit = require("exit");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
@@ -29,7 +30,7 @@ main().then(
     code => process.exitCode = code,
     err => {
         console.error(`Internal error: ${err.message}`);
-        process.exit(2);
+        exit(2);
     });
 
 interface Project {
