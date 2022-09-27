@@ -31,7 +31,9 @@ const importExpressionThreshold = 10;
 
 const reportHighlights = argv.json ? reportJson : reportText;
 
-reportHighlights(tracePath, argv.expandTypes ? typesPath : undefined, thresholdDuration, minDuration, minPercentage, importExpressionThreshold).then(found => process.exitCode = found ? 0 : 1).catch(err => {
+reportHighlights(tracePath, argv.expandTypes ? typesPath : undefined, thresholdDuration, minDuration, minPercentage, importExpressionThreshold)
+  .then(found => exit(found ? 0 : 1))
+  .catch(err => {
     console.error(`Internal Error: ${err.message}\n${err.stack}`)
     exit(2);
 });
