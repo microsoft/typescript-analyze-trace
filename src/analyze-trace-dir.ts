@@ -27,10 +27,10 @@ const limit = plimit(Math.max(1, os.cpus().length - 1));
 
 const traceDir = argv.traceDir!;
 
-main().then(
-    code => process.exitCode = code,
-    err => {
-        console.error(`Internal error: ${err.message}`);
+main()
+    .then(code => exit(code))
+    .catch(err => {
+        console.error(`Internal Error: ${err.message}`)
         exit(2);
     });
 
