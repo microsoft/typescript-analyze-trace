@@ -2,7 +2,7 @@
   "name": "@typescript/analyze-trace",
   "author": "Microsoft Corp.",
   "homepage": "https://github.com/microsoft/typescript-analyze-trace#readme",
-  "version": "0.9.0",
+  "version": "0.9.1",
   "license": "MIT",
   "description": "Analyze the output of tsc --generatetrace",
   "keywords": [
@@ -40,6 +40,7 @@
   },
   "dependencies": {
     "chalk": "^4.1.2",
+    "exit": "^0.1.2",
     "jsonparse": "^1.3.1",
     "jsonstream-next": "^3.0.0",
     "p-limit": "^3.1.0",

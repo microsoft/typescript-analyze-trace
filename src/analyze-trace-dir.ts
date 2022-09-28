@@ -6,6 +6,7 @@ import fs = require("fs");
 import os = require("os");
 import path = require("path");
 
+import exit = require("exit");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
@@ -21,15 +22,16 @@ const argv = yargs(process.argv.slice(2))
         .strict())
     .argv;
 
-const limit = plimit(os.cpus().length);
+// Try to leave one core free
+const limit = plimit(Math.max(1, os.cpus().length - 1));
 
 const traceDir = argv.traceDir!;
 
-main().then(
-    code => process.exit(code),
-    err => {
-        console.error(`Internal error: ${err.message}`);
-        process.exit(2);
+main()
+    .then(code => exit(code))
+    .catch(err => {
+        console.error(`Internal Error: ${err.message}`)
+        exit(2);
     });
 
 interface Project {

@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 import fs = require("fs");
+import exit = require("exit");
 import yargs = require("yargs");
 
 import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
@@ -30,9 +31,11 @@ const importExpressionThreshold = 10;
 
 const reportHighlights = argv.json ? reportJson : reportText;
 
-reportHighlights(tracePath, argv.expandTypes ? typesPath : undefined, thresholdDuration, minDuration, minPercentage, importExpressionThreshold).then(found => process.exit(found ? 0 : 1)).catch(err => {
+reportHighlights(tracePath, argv.expandTypes ? typesPath : undefined, thresholdDuration, minDuration, minPercentage, importExpressionThreshold)
+  .then(found => exit(found ? 0 : 1))
+  .catch(err => {
     console.error(`Internal Error: ${err.message}\n${err.stack}`)
-    process.exit(2);
+    exit(2);
 });
 
 function throwIfNotFile(path: string): string {
