@@ -8,6 +8,9 @@ import normalizePositions = require("./normalize-positions");
 import simplify = require("./simplify-type");
 import { EventSpan, ParseResult } from "./parse-trace-file";
 
+// @ts-ignore - no types
+import jsonstream = require("jsonstream-next");
+
 export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: number, minPercentage: number): EventSpan {
     const { minTime, maxTime, spans, unclosedStack } = parseResult;
 
@@ -151,18 +154,37 @@ export function unmangleCamelCase(name: string) {
 let typesCache: undefined | readonly any[];
 export async function getTypes(typesPath: string): Promise<readonly any[]> {
     if (!typesCache) {
-        try {
-            // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/9): use a streaming parser
-            const json = await fs.promises.readFile(typesPath!, { encoding: "utf-8" });
-            typesCache = JSON.parse(json);
-        }
-        catch (e: any) {
-            console.error(`Error reading types file: ${e.message}`);
-            typesCache = [];
-        }
+        return new Promise((resolve, reject) => {
+            try {
+                const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
+                readStream.on('open', () => {
+                    typesCache = []
+                })
+                readStream.on('end', () => {
+                    resolve(typesCache!)
+                });
+                readStream.on('error', (e) => {
+                    console.error(`Error reading types file: ${e.message}`);
+                    reject()
+                })
+
+                // expects types file to be {object[]}
+                const parser = jsonstream.parse('*')
+                parser.on('data', (data: object) => {
+                    (typesCache as any[]).push(data);
+                });
+
+                readStream.pipe(parser)
+            }
+            catch (e: any) {
+                console.error(`Error reading types file: ${e.message}`);
+                typesCache = [];
+                reject()
+            }
+        })
     }
 
-    return typesCache!;
+    return Promise.resolve(typesCache);
 }
 
 export interface EmittedImport {
