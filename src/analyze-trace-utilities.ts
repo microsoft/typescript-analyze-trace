@@ -157,20 +157,20 @@ export async function getTypes(typesPath: string): Promise<readonly any[]> {
         return new Promise((resolve, reject) => {
             try {
                 const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
-                readStream.on('open', () => {
+                readStream.on("open", () => {
                     typesCache = []
                 })
-                readStream.on('end', () => {
+                readStream.on("end", () => {
                     resolve(typesCache!)
                 });
-                readStream.on('error', (e) => {
+                readStream.on("error", (e) => {
                     console.error(`Error reading types file: ${e.message}`);
                     reject()
                 })
 
                 // expects types file to be {object[]}
-                const parser = jsonstream.parse('*')
-                parser.on('data', (data: object) => {
+                const parser = jsonstream.parse("*")
+                parser.on("data", (data: object) => {
                     (typesCache as any[]).push(data);
                 });
 
