@@ -154,32 +154,27 @@ export function unmangleCamelCase(name: string) {
 let typesCache: undefined | readonly any[];
 export async function getTypes(typesPath: string): Promise<readonly any[]> {
     if (!typesCache) {
-        return new Promise((resolve, reject) => {
-            try {
-                const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
-                readStream.on("open", () => {
-                    typesCache = []
-                })
-                readStream.on("end", () => {
-                    resolve(typesCache!)
-                });
-                readStream.on("error", (e) => {
-                    console.error(`Error reading types file: ${e.message}`);
-                    reject()
-                })
+        return new Promise((resolve, _reject) => {
+            typesCache = []
 
-                // expects types file to be {object[]}
-                const parser = jsonstream.parse("*")
-                parser.on("data", (data: object) => {
-                    (typesCache as any[]).push(data);
-                });
+            const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
+            readStream.on("end", () => {
+                resolve(typesCache!)
+            });
+            readStream.on("error", onError)
 
-                readStream.pipe(parser)
-            }
-            catch (e: any) {
+            // expects types file to be {object[]}
+            const parser = jsonstream.parse("*")
+            parser.on("data", (data: object) => {
+                (typesCache as any[]).push(data);
+            });
+            parser.on("error", onError)
+
+            readStream.pipe(parser)
+
+            function onError(e: Error) {
                 console.error(`Error reading types file: ${e.message}`);
-                typesCache = [];
-                reject()
+                resolve(typesCache!)
             }
         })
     }
