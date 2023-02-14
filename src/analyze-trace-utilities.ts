@@ -179,7 +179,7 @@ export async function getTypes(typesPath: string): Promise<readonly any[]> {
         });
     }
 
-    return Promise.resolve(typesCache);
+    return typesCache;
 }
 
 export interface EmittedImport {
