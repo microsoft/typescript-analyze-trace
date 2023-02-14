@@ -155,28 +155,28 @@ let typesCache: undefined | readonly any[];
 export async function getTypes(typesPath: string): Promise<readonly any[]> {
     if (!typesCache) {
         return new Promise((resolve, _reject) => {
-            typesCache = []
+            typesCache = [];
 
             const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
             readStream.on("end", () => {
-                resolve(typesCache!)
+                resolve(typesCache!);
             });
-            readStream.on("error", onError)
+            readStream.on("error", onError);
 
             // expects types file to be {object[]}
-            const parser = jsonstream.parse("*")
+            const parser = jsonstream.parse("*");
             parser.on("data", (data: object) => {
                 (typesCache as any[]).push(data);
             });
-            parser.on("error", onError)
+            parser.on("error", onError);
 
-            readStream.pipe(parser)
+            readStream.pipe(parser);
 
             function onError(e: Error) {
                 console.error(`Error reading types file: ${e.message}`);
-                resolve(typesCache!)
+                resolve(typesCache!);
             }
-        })
+        });
     }
 
     return Promise.resolve(typesCache);
