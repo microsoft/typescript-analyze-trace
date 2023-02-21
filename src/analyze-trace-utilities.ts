@@ -8,6 +8,8 @@ import normalizePositions = require("./normalize-positions");
 import simplify = require("./simplify-type");
 import { EventSpan, ParseResult } from "./parse-trace-file";
 
+import jsonstream = require("jsonstream-next");
+
 export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: number, minPercentage: number): EventSpan {
     const { minTime, maxTime, spans, unclosedStack } = parseResult;
 
@@ -151,18 +153,32 @@ export function unmangleCamelCase(name: string) {
 let typesCache: undefined | readonly any[];
 export async function getTypes(typesPath: string): Promise<readonly any[]> {
     if (!typesCache) {
-        try {
-            // TODO (https://github.com/microsoft/typescript-analyze-trace/issues/9): use a streaming parser
-            const json = await fs.promises.readFile(typesPath!, { encoding: "utf-8" });
-            typesCache = JSON.parse(json);
-        }
-        catch (e: any) {
-            console.error(`Error reading types file: ${e.message}`);
+        return new Promise((resolve, _reject) => {
             typesCache = [];
-        }
+
+            const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
+            readStream.on("end", () => {
+                resolve(typesCache!);
+            });
+            readStream.on("error", onError);
+
+            // expects types file to be {object[]}
+            const parser = jsonstream.parse("*");
+            parser.on("data", (data: object) => {
+                (typesCache as any[]).push(data);
+            });
+            parser.on("error", onError);
+
+            readStream.pipe(parser);
+
+            function onError(e: Error) {
+                console.error(`Error reading types file: ${e.message}`);
+                resolve(typesCache!);
+            }
+        });
     }
 
-    return typesCache!;
+    return typesCache;
 }
 
 export interface EmittedImport {

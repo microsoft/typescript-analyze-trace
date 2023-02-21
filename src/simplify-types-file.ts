@@ -10,7 +10,6 @@ import zlib = require("zlib");
 import split = require("split2");
 import yargs = require("yargs");
 
-// @ts-ignore - no types
 import jsonstream = require("jsonstream-next");
 
 import simplifyType = require("./simplify-type");
@@ -49,7 +48,7 @@ async function processFile(processElement: (element: {}) => readonly {}[]) {
     if (args.m) {
         const transform = jsonstream.parse("*");
 
-        const oldFlush: (cb: (err?: Error) => void) => void = transform._flush.bind(transform);
+        const oldFlush = transform._flush.bind(transform);
         const newFlush: typeof oldFlush = cb => {
             return oldFlush(err => {
                 if (err) {

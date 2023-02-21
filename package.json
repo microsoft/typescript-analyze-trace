@@ -32,6 +32,7 @@
     "build": "tsc -p src"
   },
   "devDependencies": {
+    "@types/jsonstream-next": "^3.0.1",
     "@types/node": "^14.18.5",
     "@types/split2": "^3.2.1",
     "@types/treeify": "^1.0.0",
