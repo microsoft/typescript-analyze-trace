@@ -2,7 +2,7 @@
   "name": "@typescript/analyze-trace",
   "author": "Microsoft Corp.",
   "homepage": "https://github.com/microsoft/typescript-analyze-trace#readme",
-  "version": "0.9.1",
+  "version": "0.10.0",
   "license": "MIT",
   "description": "Analyze the output of tsc --generatetrace",
   "keywords": [
