@@ -8,7 +8,6 @@ import normalizePositions = require("./normalize-positions");
 import simplify = require("./simplify-type");
 import { EventSpan, ParseResult } from "./parse-trace-file";
 
-// @ts-ignore - no types
 import jsonstream = require("jsonstream-next");
 
 export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: number, minPercentage: number): EventSpan {
