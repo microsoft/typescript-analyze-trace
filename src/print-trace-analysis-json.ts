@@ -212,8 +212,10 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
             if (type.location) {
                 const path = type.location.path;
                 if (positionMap.has(path)) {
-                    const updatedPosition = positionMap.get(path)!.get(getLineCharMapKey(type.location.line, type.location.char))!;
-                    [ type.location.line, type.location.char ] = updatedPosition;
+                    const updatedPosition = positionMap.get(path)!.get(getLineCharMapKey(type.location.line, type.location.char));
+                    if (updatedPosition) {
+                        [ type.location.line, type.location.char ] = updatedPosition;
+                    }
                     type.location.path = formatPath(path);
                 }
             }
