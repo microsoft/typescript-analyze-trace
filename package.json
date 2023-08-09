@@ -2,7 +2,7 @@
   "name": "@typescript/analyze-trace",
   "author": "Microsoft Corp.",
   "homepage": "https://github.com/microsoft/typescript-analyze-trace#readme",
-  "version": "0.10.0",
+  "version": "0.10.1",
   "license": "MIT",
   "description": "Analyze the output of tsc --generatetrace",
   "keywords": [
@@ -31,6 +31,7 @@
   "scripts": {
     "build": "tsc -p src"
   },
+  "packageManager": "npm@8.19.4",
   "devDependencies": {
     "@types/jsonstream-next": "^3.0.1",
     "@types/node": "^14.18.5",
