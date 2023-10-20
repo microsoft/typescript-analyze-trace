@@ -111,7 +111,7 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
         // Sort slow to fast
         const sortedChildren = curr.children.sort((a, b) => (b.end - b.start) - (a.end - a.start));
         for (const child of sortedChildren) {
-            children.push(...await getHotSpotsWorker(child, currentFile, positionMap, relatedTypes, importExpressionThreshold));
+            children.push(...(await getHotSpotsWorker(child, currentFile, positionMap, relatedTypes, importExpressionThreshold) || []));
         }
     }
 
