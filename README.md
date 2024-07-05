@@ -12,7 +12,7 @@ The short version is to run these commands:
 ```sh
 tsc -p path/to/tsconfig.json --generateTrace traceDir
 npm install --no-save @typescript/analyze-trace
-npx analyze-trace traceDir
+npx @typescript/analyze-trace traceDir
 ```
 
 Each of these commands do the following:
@@ -20,13 +20,13 @@ Each of these commands do the following:
 1. Building your project with `--generateTrace` targeting a specific directory (e.g.`tsc -p path/to/tsconfig.json --generateTrace traceDir`) will create a new `traceDir` directory with paired trace and types files.
    Note that running with `-b`/`--build` mode works as well.
 2. Installing `@typescript/analyze-trace` makes its various commands available in your project.
-3. Running `npx analyze-trace traceDir` outputs a sorted list of compilation hot-spots - places where TypeScript is taking a high amount of time.
+3. Running `npx @typescript/analyze-trace traceDir` outputs a sorted list of compilation hot-spots - places where TypeScript is taking a high amount of time.
 
 The analyzer tries to refer back to files from your project to provide better output, and uses relative paths to do so.
 If your project changed since running `tsc --generateTrace`, or you moved your trace output directory, then the tool's results may be misleading.
 For best results, re-run `--generateTrace` when files and dependencies are updated, and ensure the trace output is always in the same relative location with respect to the input project.
 
-You can run `npx analyze-trace --help` to find out about other options including:
+You can run `npx @typescript/analyze-trace --help` to find out about other options including:
 
 Option                    | Default | Description
 --------------------------|---------|-------------------------------------------------------------------------------
