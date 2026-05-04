@@ -9,8 +9,10 @@ const packageNameRegex = /\/node_modules\/((?:[^@][^/]+)|(?:@[^/]+\/[^/]+))/g;
 
 export interface Event {
     ph: string;
-    ts: string;
-    dur?: string;
+    ts: string | number;
+    dur?: string | number;
+    pid?: string | number;
+    tid?: string | number;
     name: string;
     cat: string;
     args?: any;
@@ -28,6 +30,7 @@ export interface ParseResult {
     maxTime: number;
     spans: EventSpan[];
     unclosedStack: Event[];
+    unmatchedEndEvents: Event[];
     nodeModulePaths: Map<string, string[]>;
 }
 
@@ -37,7 +40,8 @@ export function parse(tracePath: string, minDuration: number): Promise<ParseResu
 
         let minTime = Infinity;
         let maxTime = 0;
-        const unclosedStack: Event[] = []; // Sorted in increasing order of start time (even when below timestamp resolution)
+        const stacks = new Map<string, Event[]>();
+        const unmatchedEndEvents: Event[] = [];
         const spans: EventSpan[] = []; // Sorted in increasing order of end time, then increasing order of start time (even when below timestamp resolution)
         const nodeModulePaths = new Map<string, string[]>();
         p.onValue = function (value: any) {
@@ -54,14 +58,20 @@ export function parse(tracePath: string, minDuration: number): Promise<ParseResu
             const event = value as Event;
 
             if (event.ph === "B") {
-                unclosedStack.push(event);
+                getStack(stacks, getEventStackKey(event)).push(event);
                 return;
             }
 
             let span: EventSpan;
             if (event.ph === "E") {
-                const beginEvent = unclosedStack.pop()!;
-                span = { event: beginEvent, start: +beginEvent.ts, end: +event.ts, children: [] };
+                const stack = getStack(stacks, getEventStackKey(event));
+                const beginEvent = stack[stack.length - 1];
+                if (!beginEvent || !isMatchingBegin(beginEvent, event)) {
+                    unmatchedEndEvents.push(event);
+                    return;
+                }
+                stack.pop();
+                span = { event: mergeBeginAndEnd(beginEvent, event), start: +beginEvent.ts, end: +event.ts, children: [] };
             }
             else if (event.ph === "X") {
                 const start = +event.ts;
@@ -79,6 +89,7 @@ export function parse(tracePath: string, minDuration: number): Promise<ParseResu
             if (span.event!.name === "findSourceFile") {
                 const path = span.event!.args?.fileName;
                 if (path) {
+                    packageNameRegex.lastIndex = 0;
                     while (true) {
                         const m = packageNameRegex.exec(path);
                         if (!m) break;
@@ -105,13 +116,49 @@ export function parse(tracePath: string, minDuration: number): Promise<ParseResu
         const readStream = fs.createReadStream(tracePath);
         readStream.on("data", chunk => p.write(chunk));
         readStream.on("end", () => {
+            const unclosedStack: Event[] = [];
+            for (const stack of stacks.values()) {
+                unclosedStack.push(...stack);
+            }
             resolve({
                 minTime,
                 maxTime,
                 spans,
                 unclosedStack,
+                unmatchedEndEvents,
                 nodeModulePaths,
             });
         });
     });
+}
+
+function getStack(stacks: Map<string, Event[]>, key: string): Event[] {
+    let stack = stacks.get(key);
+    if (!stack) {
+        stack = [];
+        stacks.set(key, stack);
+    }
+    return stack;
+}
+
+function getEventStackKey(event: Event): string {
+    return `${event.pid ?? 1}:${event.tid ?? 1}`;
+}
+
+function isMatchingBegin(beginEvent: Event, endEvent: Event): boolean {
+    return beginEvent.name === endEvent.name && beginEvent.cat === endEvent.cat;
+}
+
+function mergeBeginAndEnd(beginEvent: Event, endEvent: Event): Event {
+    if (!beginEvent.args && !endEvent.args) {
+        return beginEvent;
+    }
+
+    return {
+        ...beginEvent,
+        args: {
+            ...beginEvent.args,
+            ...endEvent.args,
+        },
+    };
 }

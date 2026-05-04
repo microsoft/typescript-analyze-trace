@@ -6,7 +6,7 @@ import path = require("path");
 import countImportExpressions = require("./count-import-expressions");
 import normalizePositions = require("./normalize-positions");
 import simplify = require("./simplify-type");
-import { EventSpan, ParseResult } from "./parse-trace-file";
+import { Event, EventSpan, ParseResult } from "./parse-trace-file";
 
 import jsonstream = require("jsonstream-next");
 
@@ -18,22 +18,23 @@ export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: n
         spans.push({ event, start: +event.ts, end: maxTime, children: [] });
     }
 
-    spans.sort((a, b) => a.start - b.start);
+    spans.sort((a, b) => a.start - b.start || b.end - a.end);
 
     const root: EventSpan = { start: minTime, end: maxTime, children: [] };
-    const stack = [ root ];
+    const stacks = new Map<string, EventSpan[]>();
 
     for (const span of spans) {
+        const stack = getStack(span);
         let i = stack.length - 1;
         for (; i > 0; i--) { // No need to check root at stack[0]
             const curr = stack[i];
-            if (curr.end > span.start) {
-                // Pop down to parent
-                stack.length = i + 1;
+            if (contains(curr, span)) {
                 break;
             }
         }
 
+        // Pop down to parent, or to the root if this is a sibling of the whole lane.
+        stack.length = i + 1;
         const parent = stack[i];
         const duration = span.end - span.start;
         if (duration >= thresholdDuration || duration >= minPercentage * (parent.end - parent.start)) {
@@ -43,19 +44,36 @@ export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: n
     }
 
     return root;
+
+    function getStack(span: EventSpan): EventSpan[] {
+        const event = span.event;
+        const key = `${event?.pid ?? 1}:${event?.tid ?? 1}`;
+        let stack = stacks.get(key);
+        if (!stack) {
+            stack = [ root ];
+            stacks.set(key, stack);
+        }
+        return stack;
+    }
+
+    function contains(parent: EventSpan, child: EventSpan): boolean {
+        return parent.start <= child.start && child.end <= parent.end;
+    }
 }
 
 type LineChar = normalizePositions.LineChar;
 export type PositionMap = Map<string, Map<string, LineChar>>; // Path to position (offset or LineChar) to LineChar
 
-export async function getNormalizedPositions(root: EventSpan, relatedTypes: Map<number, object> | undefined): Promise<PositionMap> {
+export async function getNormalizedPositions(root: EventSpan, relatedTypes: readonly Map<number, object>[] | undefined): Promise<PositionMap> {
     const positionMap = new Map<string, (number | LineChar)[]>();
     recordPositions(root, /*currentFile*/ undefined);
     if (relatedTypes) {
-        for (const type of relatedTypes.values()) {
-            const location: any = (type as any).location;
-            if (location) {
-                recordPosition(location.path, [ location.line, location.char ]);
+        for (const relatedTypesForSource of relatedTypes) {
+            for (const type of relatedTypesForSource.values()) {
+                const location: any = (type as any).location;
+                if (location) {
+                    recordPosition(location.path, [ location.line, location.char ]);
+                }
             }
         }
     }
@@ -86,7 +104,7 @@ export async function getNormalizedPositions(root: EventSpan, relatedTypes: Map<
 
     function recordPositions(span: EventSpan, currentFile: string | undefined): void {
         if (span.event?.name === "checkSourceFile") {
-            currentFile = span.event!.args!.path;
+            currentFile = span.event.args?.path ?? currentFile;
         }
         else if (span.event?.cat === "check") {
             const args = span.event.args;
@@ -119,6 +137,15 @@ export function getLineCharMapKey(line: number, char: number) {
     return `${line},${char}`;
 }
 
+export interface TypeSource {
+    typesPath: string;
+    checkerId?: number;
+}
+
+export type TypeSources = readonly TypeSource[];
+
+export const typeSourcesEnvVar = "TYPESCRIPT_ANALYZE_TRACE_TYPE_SOURCES";
+
 export async function getPackageVersion(packagePath: string): Promise<string | undefined> {
     try {
         const jsonPath = path.join(packagePath, "package.json");
@@ -150,22 +177,23 @@ export function unmangleCamelCase(name: string) {
     return result;
 }
 
-let typesCache: undefined | readonly any[];
+const typesCache = new Map<string, Promise<readonly any[]>>();
 export async function getTypes(typesPath: string): Promise<readonly any[]> {
-    if (!typesCache) {
-        return new Promise((resolve, _reject) => {
-            typesCache = [];
+    let typesPromise = typesCache.get(typesPath);
+    if (!typesPromise) {
+        typesPromise = new Promise((resolve, _reject) => {
+            const types: any[] = [];
 
             const readStream = fs.createReadStream(typesPath, { encoding: "utf-8" });
             readStream.on("end", () => {
-                resolve(typesCache!);
+                resolve(types);
             });
             readStream.on("error", onError);
 
             // expects types file to be {object[]}
             const parser = jsonstream.parse("*");
             parser.on("data", (data: object) => {
-                (typesCache as any[]).push(data);
+                types.push(data);
             });
             parser.on("error", onError);
 
@@ -173,12 +201,13 @@ export async function getTypes(typesPath: string): Promise<readonly any[]> {
 
             function onError(e: Error) {
                 console.error(`Error reading types file: ${e.message}`);
-                resolve(typesCache!);
+                resolve(types);
             }
         });
+        typesCache.set(typesPath, typesPromise);
     }
 
-    return typesCache;
+    return typesPromise;
 }
 
 export interface EmittedImport {
@@ -196,8 +225,10 @@ export async function getEmittedImports(dtsPath: string, importExpressionThresho
     return sorted;
 }
 
-export async function getRelatedTypes(root: EventSpan, typesPath: string, leafOnly: boolean): Promise<Map<number, object>> {
-    const relatedTypes = new Map<number, object>();
+export type RelatedTypes = Map<string, Map<number, object>>;
+
+export async function getRelatedTypes(root: EventSpan, typeSources: TypeSources, leafOnly: boolean): Promise<RelatedTypes> {
+    const relatedTypes = new Map<string, Map<number, object>>();
 
     const stack: EventSpan[] = [];
     stack.push(root);
@@ -206,16 +237,38 @@ export async function getRelatedTypes(root: EventSpan, typesPath: string, leafOn
         const curr = stack.pop()!;
         if (!leafOnly || curr.children.length === 0) {
             if (curr.event?.name === "structuredTypeRelatedTo") {
-                const types = await getTypes(typesPath);
+                const args = curr.event.args;
+                if (!args) {
+                    stack.push(...curr.children);
+                    continue;
+                }
+                const typeSource = getTypeSourceForEvent(typeSources, curr.event);
+                if (!typeSource) {
+                    stack.push(...curr.children);
+                    continue;
+                }
+                const types = await getTypes(typeSource.typesPath);
                 if (types.length) {
-                    addRelatedTypes(types, curr.event.args!.sourceId, relatedTypes);
-                    addRelatedTypes(types, curr.event.args!.targetId, relatedTypes);
+                    const relatedTypesForSource = getRelatedTypesForSource(relatedTypes, typeSource);
+                    addRelatedTypes(types, args.sourceId, relatedTypesForSource);
+                    addRelatedTypes(types, args.targetId, relatedTypesForSource);
                 }
             }
             else if (curr.event?.name === "getVariancesWorker") {
-                const types = await getTypes(typesPath);
+                const args = curr.event.args;
+                if (!args) {
+                    stack.push(...curr.children);
+                    continue;
+                }
+                const typeSource = getTypeSourceForEvent(typeSources, curr.event);
+                if (!typeSource) {
+                    stack.push(...curr.children);
+                    continue;
+                }
+                const types = await getTypes(typeSource.typesPath);
                 if (types.length) {
-                    addRelatedTypes(types, curr.event.args!.id, relatedTypes);
+                    const relatedTypesForSource = getRelatedTypesForSource(relatedTypes, typeSource);
+                    addRelatedTypes(types, args.id, relatedTypesForSource);
                 }
             }
         }
@@ -224,6 +277,46 @@ export async function getRelatedTypes(root: EventSpan, typesPath: string, leafOn
     }
 
     return relatedTypes;
+}
+
+export function getRelatedTypesForEvent(relatedTypes: RelatedTypes | undefined, typeSources: TypeSources | undefined, event: Event): Map<number, object> | undefined {
+    if (!relatedTypes || !typeSources) {
+        return undefined;
+    }
+
+    const typeSource = getTypeSourceForEvent(typeSources, event);
+    return typeSource && relatedTypes.get(getTypeSourceKey(typeSource));
+}
+
+export function getAllRelatedTypes(relatedTypes: RelatedTypes | undefined): Map<number, object>[] | undefined {
+    return relatedTypes && Array.from(relatedTypes.values());
+}
+
+function getRelatedTypesForSource(relatedTypes: RelatedTypes, typeSource: TypeSource): Map<number, object> {
+    const key = getTypeSourceKey(typeSource);
+    let relatedTypesForSource = relatedTypes.get(key);
+    if (!relatedTypesForSource) {
+        relatedTypesForSource = new Map<number, object>();
+        relatedTypes.set(key, relatedTypesForSource);
+    }
+    return relatedTypesForSource;
+}
+
+function getTypeSourceForEvent(typeSources: TypeSources, event: Event): TypeSource | undefined {
+    if (typeSources.length === 1) {
+        return typeSources[0];
+    }
+
+    const checkerId = event.args?.checkerId;
+    if (checkerId === undefined) {
+        return undefined;
+    }
+
+    return typeSources.find(typeSource => typeSource.checkerId === checkerId);
+}
+
+function getTypeSourceKey(typeSource: TypeSource): string {
+    return typeSource.checkerId === undefined ? typeSource.typesPath : `${typeSource.checkerId}`;
 }
 
 function addRelatedTypes(types: readonly object[], id: number, relatedTypes: Map<number, object>): void {

@@ -10,6 +10,7 @@ import exit = require("exit");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
+import { TypeSource, typeSourcesEnvVar } from "./analyze-trace-utilities";
 import { commandLineOptions, checkCommandLineOptions, pushCommandLineOptions } from "./analyze-trace-options";
 
 const argv = yargs(process.argv.slice(2))
@@ -37,7 +38,12 @@ main()
 interface Project {
     configFilePath?: string;
     tracePath: string;
-    typesPath: string;
+    typeSources?: TypeSource[];
+}
+
+interface LegendProject extends Project {
+    typesPath?: string;
+    checkerId?: number;
 }
 
 interface ProjectResult {
@@ -48,6 +54,13 @@ interface ProjectResult {
     signal: NodeJS.Signals | undefined;
 }
 
+interface SerializableProject {
+    configFilePath?: string;
+    tracePath: string;
+    typesPath?: string;
+    typesPaths?: string[];
+}
+
 async function main(): Promise<number> {
     let projects: undefined | Project[];
 
@@ -55,12 +68,7 @@ async function main(): Promise<number> {
     if (await isFile(legendPath)) {
         try {
             const legendText = await fs.promises.readFile(legendPath, { encoding: "utf-8" });
-            projects = JSON.parse(legendText);
-
-            for (const project of projects!) {
-                project.tracePath = path.resolve(traceDir, path.basename(project.tracePath));
-                project.typesPath = path.resolve(traceDir, path.basename(project.typesPath));
-            }
+            projects = coalesceProjectsFromLegend(JSON.parse(legendText));
         }
         catch (e: any) {
             console.error(`Error reading legend file: ${e.message}`);
@@ -78,7 +86,7 @@ async function main(): Promise<number> {
             if (match) {
                 projects.push({
                     tracePath: path.join(traceDir, name),
-                    typesPath: path.join(traceDir, `types${match[1]}`),
+                    typeSources: [{ typesPath: path.join(traceDir, `types${match[1]}`) }],
                 });
             }
         }
@@ -122,13 +130,14 @@ async function printResultsAsJson(results: readonly ProjectResult[]): Promise<nu
             ? undefined
             : hadErrors.map(result => ({
                 ...result,
+                project: serializeProject(result.project),
                 stdout: undefined,
                 stderr: undefined,
                 exitCode: result.exitCode || undefined,
                 message: result.stderr,
             })),
         results: hadNoErrors.map(result => ({
-            project: result.project,
+            project: serializeProject(result.project),
             highlights: result.highlights,
         })),
     };
@@ -219,15 +228,33 @@ function getProjectDescription(project: Project) {
        : path.basename(project.tracePath);
 }
 
+function serializeProject(project: Project): SerializableProject {
+    const typesPaths = project.typeSources?.map(source => source.typesPath);
+    return {
+        configFilePath: project.configFilePath,
+        tracePath: project.tracePath,
+        typesPath: typesPaths?.length === 1 ? typesPaths[0] : undefined,
+        typesPaths: typesPaths && typesPaths.length > 1 ? typesPaths : undefined,
+    };
+}
+
 async function analyzeProject(project: Project): Promise<ProjectResult> {
     const args = [ project.tracePath ];
-    if (await isFile(project.typesPath)) {
-        args.push(project.typesPath);
-    }
+    const typeSources = await getExistingTypeSources(project);
     pushCommandLineOptions(args, argv);
+    const childEnv = { ...process.env };
+    if (typeSources) {
+        childEnv[typeSourcesEnvVar] = JSON.stringify(typeSources);
+    }
+    else {
+        delete childEnv[typeSourcesEnvVar];
+    }
 
     return new Promise<ProjectResult>(resolve => {
-        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, { stdio: "pipe" });
+        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, {
+            stdio: "pipe",
+            env: childEnv,
+        });
 
         let stdout = "";
         let stderr = "";
@@ -245,6 +272,53 @@ async function analyzeProject(project: Project): Promise<ProjectResult> {
             });
         });
     });
+}
+
+async function getExistingTypeSources(project: Project): Promise<TypeSource[] | undefined> {
+    if (!project.typeSources) {
+        return undefined;
+    }
+
+    const existing: TypeSource[] = [];
+    for (const source of project.typeSources) {
+        if (await isFile(source.typesPath)) {
+            existing.push(source);
+        }
+    }
+
+    return existing.length ? existing : undefined;
+}
+
+function coalesceProjectsFromLegend(legend: LegendProject[]): Project[] {
+    const projectMap = new Map<string, Project>();
+    for (const legendProject of legend) {
+        const tracePath = path.resolve(traceDir, path.basename(legendProject.tracePath));
+        const typesPath = legendProject.typesPath && path.resolve(traceDir, path.basename(legendProject.typesPath));
+        const typeSource = typesPath
+            ? { typesPath, checkerId: legendProject.checkerId }
+            : undefined;
+        const key = `${legendProject.configFilePath || ""}\n${tracePath}`;
+
+        let project = projectMap.get(key);
+        if (!project) {
+            project = {
+                configFilePath: legendProject.configFilePath,
+                tracePath,
+                typeSources: typeSource ? [typeSource] : undefined,
+            };
+            projectMap.set(key, project);
+            continue;
+        }
+
+        if (typesPath) {
+            project.typeSources ??= [];
+            if (!project.typeSources.some(source => source.typesPath === typesPath && source.checkerId === legendProject.checkerId)) {
+                project.typeSources.push(typeSource!);
+            }
+        }
+    }
+
+    return Array.from(projectMap.values());
 }
 
 function isFile(path: string): Promise<boolean> {
