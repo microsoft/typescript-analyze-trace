@@ -24,7 +24,6 @@ const argv = yargs(process.argv.slice(2))
 
 const tracePath = argv.tracePath!;
 const typesPath = argv.typesPath;
-const typeSources = argv.expandTypes ? getTypeSources() : undefined;
 
 const thresholdDuration = argv.forceMillis * 1000; // microseconds
 const minDuration = argv.skipMillis * 1000; // microseconds
@@ -33,12 +32,17 @@ const importExpressionThreshold = 10;
 
 const reportHighlights = argv.json ? reportJson : reportText;
 
-reportHighlights(tracePath, typeSources, thresholdDuration, minDuration, minPercentage, importExpressionThreshold)
+run()
   .then(found => exit(found ? 0 : 1))
   .catch(err => {
     console.error(`Internal Error: ${err.message}\n${err.stack}`)
     exit(2);
 });
+
+async function run(): Promise<boolean> {
+    const typeSources = argv.expandTypes ? getTypeSources() : undefined;
+    return await reportHighlights(tracePath, typeSources, thresholdDuration, minDuration, minPercentage, importExpressionThreshold);
+}
 
 function throwIfNotFile(path: string): string {
     if (!fs.existsSync(path) || !fs.statSync(path)?.isFile()) {
@@ -57,7 +61,14 @@ function getTypeSources(): readonly TypeSource[] | undefined {
 }
 
 function parseTypeSources(json: string): readonly TypeSource[] {
-    const sources = JSON.parse(json);
+    let sources: unknown;
+    try {
+        sources = JSON.parse(json);
+    }
+    catch (e: any) {
+        throw new Error(`${typeSourcesEnvVar} must be valid JSON: ${e.message}`);
+    }
+
     if (!Array.isArray(sources)) {
         throw new Error(`${typeSourcesEnvVar} must be a JSON array`);
     }

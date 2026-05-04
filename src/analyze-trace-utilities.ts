@@ -316,7 +316,9 @@ function getTypeSourceForEvent(typeSources: TypeSources, event: Event): TypeSour
 }
 
 function getTypeSourceKey(typeSource: TypeSource): string {
-    return typeSource.checkerId === undefined ? typeSource.typesPath : `${typeSource.checkerId}`;
+    return typeSource.checkerId === undefined
+        ? `path:${typeSource.typesPath}`
+        : `checkerId:${typeSource.checkerId}:path:${typeSource.typesPath}`;
 }
 
 function addRelatedTypes(types: readonly object[], id: number, relatedTypes: Map<number, object>): void {

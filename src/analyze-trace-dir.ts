@@ -59,6 +59,7 @@ interface SerializableProject {
     tracePath: string;
     typesPath?: string;
     typesPaths?: string[];
+    typeSources?: TypeSource[];
 }
 
 async function main(): Promise<number> {
@@ -235,6 +236,7 @@ function serializeProject(project: Project): SerializableProject {
         tracePath: project.tracePath,
         typesPath: typesPaths?.length === 1 ? typesPaths[0] : undefined,
         typesPaths: typesPaths && typesPaths.length > 1 ? typesPaths : undefined,
+        typeSources: project.typeSources,
     };
 }
 
