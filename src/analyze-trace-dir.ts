@@ -10,8 +10,13 @@ import exit = require("exit");
 import plimit = require("p-limit");
 import yargs = require("yargs");
 
-import { TypeSource, typeSourcesEnvVar } from "./analyze-trace-utilities";
-import { commandLineOptions, checkCommandLineOptions, pushCommandLineOptions } from "./analyze-trace-options";
+import { TypeSource } from "./analyze-trace-utilities";
+import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
+
+// Mirror of the worker's defaults; kept here so the dir analyzer is the single source of truth
+// for what gets handed to each worker invocation.
+const minPercentage = 0.6;
+const importExpressionThreshold = 10;
 
 const argv = yargs(process.argv.slice(2))
     .command("$0 <traceDir>", "Preprocess tracing type dumps", yargs => yargs
@@ -241,21 +246,21 @@ function serializeProject(project: Project): SerializableProject {
 }
 
 async function analyzeProject(project: Project): Promise<ProjectResult> {
-    const args = [ project.tracePath ];
     const typeSources = await getExistingTypeSources(project);
-    pushCommandLineOptions(args, argv);
-    const childEnv = { ...process.env };
-    if (typeSources) {
-        childEnv[typeSourcesEnvVar] = JSON.stringify(typeSources);
-    }
-    else {
-        delete childEnv[typeSourcesEnvVar];
-    }
+    const payload = {
+        tracePath: project.tracePath,
+        typeSources,
+        forceMillis: argv.forceMillis,
+        skipMillis: argv.skipMillis,
+        expandTypes: argv.expandTypes,
+        json: argv.json,
+        minPercentage,
+        importExpressionThreshold,
+    };
 
     return new Promise<ProjectResult>(resolve => {
-        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), args, {
+        const child = cp.fork(path.join(__dirname, "analyze-trace-file"), [JSON.stringify(payload)], {
             stdio: "pipe",
-            env: childEnv,
         });
 
         let stdout = "";

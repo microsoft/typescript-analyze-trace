@@ -144,8 +144,6 @@ export interface TypeSource {
 
 export type TypeSources = readonly TypeSource[];
 
-export const typeSourcesEnvVar = "TYPESCRIPT_ANALYZE_TRACE_TYPE_SOURCES";
-
 export async function getPackageVersion(packagePath: string): Promise<string | undefined> {
     try {
         const jsonPath = path.join(packagePath, "package.json");
