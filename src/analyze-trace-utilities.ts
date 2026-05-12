@@ -6,7 +6,7 @@ import path = require("path");
 import countImportExpressions = require("./count-import-expressions");
 import normalizePositions = require("./normalize-positions");
 import simplify = require("./simplify-type");
-import { Event, EventSpan, ParseResult } from "./parse-trace-file";
+import { Event, EventSpan, ParseResult, getEventStackKey } from "./parse-trace-file";
 
 import jsonstream = require("jsonstream-next");
 
@@ -47,7 +47,7 @@ export function buildHotPathsTree(parseResult: ParseResult, thresholdDuration: n
 
     function getStack(span: EventSpan): EventSpan[] {
         const event = span.event;
-        const key = `${event?.pid ?? 1}:${event?.tid ?? 1}`;
+        const key = event ? getEventStackKey(event) : "1:1";
         let stack = stacks.get(key);
         if (!stack) {
             stack = [ root ];

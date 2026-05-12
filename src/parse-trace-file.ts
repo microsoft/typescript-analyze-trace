@@ -141,7 +141,7 @@ function getStack(stacks: Map<string, Event[]>, key: string): Event[] {
     return stack;
 }
 
-function getEventStackKey(event: Event): string {
+export function getEventStackKey(event: Event): string {
     return `${event.pid ?? 1}:${event.tid ?? 1}`;
 }
 
