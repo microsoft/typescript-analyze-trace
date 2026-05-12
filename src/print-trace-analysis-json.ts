@@ -1,16 +1,15 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { assert } from "console";
 import fs = require("fs");
 import path = require("path");
 
 import { EventSpan, parse } from "./parse-trace-file";
-import { buildHotPathsTree, EmittedImport, getEmittedImports, getLineCharMapKey, getNormalizedPositions, getPackageVersion, getRelatedTypes, getTypes, PositionMap, unmangleCamelCase } from "./analyze-trace-utilities";
+import { buildHotPathsTree, EmittedImport, getAllRelatedTypes, getEmittedImports, getLineCharMapKey, getNormalizedPositions, getPackageVersion, getRelatedTypes, getRelatedTypesForEvent, PositionMap, RelatedTypes, TypeSources, unmangleCamelCase } from "./analyze-trace-utilities";
 
 export async function reportHighlights(
     tracePath: string,
-    typesPath: string | undefined,
+    typeSources: TypeSources | undefined,
     thresholdDuration: number,
     minDuration: number,
     minPercentage: number,
@@ -25,8 +24,9 @@ export async function reportHighlights(
     const unclosedEvents = parseResult.unclosedStack;
     unclosedEvents.reverse();
     result["unterminatedEvents"] = undefinedIfEmpty(unclosedEvents);
+    result["unmatchedEndEvents"] = undefinedIfEmpty(parseResult.unmatchedEndEvents);
 
-    const hotSpots = await getHotSpots(root, importExpressionThreshold, typesPath);
+    const hotSpots = await getHotSpots(root, importExpressionThreshold, typeSources);
     result["hotSpots"] = undefinedIfEmpty(hotSpots);
 
     const duplicatePackages = await getDuplicateNodeModules(parseResult.nodeModulePaths);
@@ -87,21 +87,17 @@ interface HotType {
     children: HotType[];
 }
 
-async function getHotSpots(root: EventSpan, importExpressionThreshold: number, typesPath: string | undefined): Promise<HotFrame[]> {
-    const relatedTypes = typesPath ? await getRelatedTypes(root, typesPath, /*leafOnly*/ false) : undefined;
-    const positionMap = await getNormalizedPositions(root, relatedTypes);
-    const types = typesPath ? await getTypes(typesPath) : undefined;
-    return await getHotSpotsWorker(root, /*currentFile*/ undefined, positionMap, relatedTypes, importExpressionThreshold);
+async function getHotSpots(root: EventSpan, importExpressionThreshold: number, typeSources: TypeSources | undefined): Promise<HotFrame[]> {
+    const relatedTypes = typeSources ? await getRelatedTypes(root, typeSources, /*leafOnly*/ false) : undefined;
+    const positionMap = await getNormalizedPositions(root, getAllRelatedTypes(relatedTypes));
+    return await getHotSpotsWorker(root, /*currentFile*/ undefined, positionMap, relatedTypes, typeSources, importExpressionThreshold);
 }
 
-async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefined, positionMap: PositionMap, relatedTypes: Map<number, object> | undefined, importExpressionThreshold: number): Promise<HotFrame[]> {
+async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefined, positionMap: PositionMap, relatedTypes: RelatedTypes | undefined, typeSources: TypeSources | undefined, importExpressionThreshold: number): Promise<HotFrame[]> {
     if (curr.event?.cat === "check") {
-        const path = curr.event.args!.path;
-        if (path) {
-            currentFile = path;
-        }
-        else {
-            assert(curr.event?.name !== "checkSourceFile", "checkSourceFile should have a path");
+        const currentEventPath = curr.event.args?.path;
+        if (currentEventPath) {
+            currentFile = currentEventPath;
         }
     }
 
@@ -111,7 +107,7 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
         // Sort slow to fast
         const sortedChildren = curr.children.sort((a, b) => (b.end - b.start) - (a.end - a.start));
         for (const child of sortedChildren) {
-            children.push(...await getHotSpotsWorker(child, currentFile, positionMap, relatedTypes, importExpressionThreshold));
+            children.push(...await getHotSpotsWorker(child, currentFile, positionMap, relatedTypes, typeSources, importExpressionThreshold));
         }
     }
 
@@ -130,7 +126,7 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
             // case "findSourceFile":
             //     TODO (https://github.com/microsoft/typescript-analyze-trace/issues/2)
             case "emitDeclarationFileOrBundle":
-                const dtsPath = event.args.declarationFilePath;
+                const dtsPath = event.args?.declarationFilePath;
                 if (!dtsPath || !fs.existsSync(dtsPath)) {
                     return undefined;
                 }
@@ -151,29 +147,42 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
                     return undefined;
                 }
             case "checkSourceFile":
+                if (!currentFile) {
+                    return undefined;
+                }
                 return {
                     description: `Check file ${formatPath(currentFile!)}`,
                     timeMs,
                     path: formatPath(currentFile!),
                     children,
                 };
-            case "structuredTypeRelatedTo":
-                const args = event.args!;
+            case "structuredTypeRelatedTo": {
+                const args = event.args;
+                if (!args) {
+                    return undefined;
+                }
+                const eventRelatedTypes = getRelatedTypesForEvent(relatedTypes, typeSources, event);
                 return {
                     description: `Compare types ${args.sourceId} and ${args.targetId}`,
                     timeMs,
                     children,
-                    types: relatedTypes ? [ getHotType(args.sourceId), getHotType(args.targetId) ] : undefined,
+                    types: eventRelatedTypes ? [ getHotType(args.sourceId, eventRelatedTypes), getHotType(args.targetId, eventRelatedTypes) ] : undefined,
                 };
-            case "getVariancesWorker":
+            }
+            case "getVariancesWorker": {
+                if (!event.args) {
+                    return undefined;
+                }
+                const eventRelatedTypes = getRelatedTypesForEvent(relatedTypes, typeSources, event);
                 return {
                     description: `Determine variance of type ${event.args!.id}`,
                     timeMs,
                     children,
-                    types: relatedTypes ? [ getHotType(event.args!.id) ] : undefined,
+                    types: eventRelatedTypes ? [ getHotType(event.args!.id, eventRelatedTypes) ] : undefined,
                 };
+            }
             default:
-                if (event.cat === "check" && event.args && event.args.pos && event.args.end) {
+                if (event.cat === "check" && event.args && event.args.pos && event.args.end && currentFile) {
                     const frame: HotFrame = {
                         description: unmangleCamelCase(event.name),
                         timeMs,
@@ -201,12 +210,12 @@ async function getHotSpotsWorker(curr: EventSpan, currentFile: string | undefine
         }
     }
 
-    function getHotType(id: number): HotType {
+    function getHotType(id: number, eventRelatedTypes: Map<number, object>): HotType {
         return worker(id, [])!;
 
         function worker(id: any, ancestorIds: any[]): HotType | undefined {
             if (typeof id !== "number") return;
-            const type: any = relatedTypes!.get(id);
+            const type: any = eventRelatedTypes.get(id);
             if (!type) return undefined;
 
             if (type.location) {

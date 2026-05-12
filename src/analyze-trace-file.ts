@@ -1,46 +1,51 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
+//
+// Internal worker process spawned by analyze-trace-dir. Not a public CLI.
+// Receives a single JSON payload describing what to analyze and prints the
+// results to stdout (text or JSON, per the payload).
 
-import fs = require("fs");
 import exit = require("exit");
-import yargs = require("yargs");
 
-import { commandLineOptions, checkCommandLineOptions } from "./analyze-trace-options";
 import { reportHighlights as reportText } from "./print-trace-analysis-text";
 import { reportHighlights as reportJson } from "./print-trace-analysis-json";
+import { TypeSource } from "./analyze-trace-utilities";
 
-const argv = yargs(process.argv.slice(2))
-    .command("$0 <tracePath> [typesPath]", "Preprocess tracing type dumps", yargs => yargs
-        .positional("tracePath", { type: "string", desc: "Trace file to read", coerce: throwIfNotFile })
-        .positional("typesPath", { type: "string", desc: "Corresponding types file", coerce: throwIfNotFile })
-        .options(commandLineOptions)
-        .check(checkCommandLineOptions)
-        .help("h").alias("h", "help")
-        .epilog("Exits with code 0 if highlights were found, 1 if no highlights were found, and 2 if an error occurred")
-        .strict())
-    .argv;
+interface WorkerPayload {
+    tracePath: string;
+    typeSources?: TypeSource[];
+    forceMillis: number;
+    skipMillis: number;
+    expandTypes: boolean;
+    json: boolean;
+    importExpressionThreshold: number;
+    minPercentage: number;
+}
 
+run()
+    .then(found => exit(found ? 0 : 1))
+    .catch(err => {
+        console.error(`Internal Error: ${err.message}\n${err.stack}`);
+        exit(2);
+    });
 
-const tracePath = argv.tracePath!;
-const typesPath = argv.typesPath;
+async function run(): Promise<boolean> {
+    const payload = parsePayload(process.argv[2]);
+    const reportHighlights = payload.json ? reportJson : reportText;
+    const typeSources = payload.expandTypes ? payload.typeSources : undefined;
+    return await reportHighlights(
+        payload.tracePath,
+        typeSources,
+        payload.forceMillis * 1000,
+        payload.skipMillis * 1000,
+        payload.minPercentage,
+        payload.importExpressionThreshold,
+    );
+}
 
-const thresholdDuration = argv.forceMillis * 1000; // microseconds
-const minDuration = argv.skipMillis * 1000; // microseconds
-const minPercentage = 0.6;
-const importExpressionThreshold = 10;
-
-const reportHighlights = argv.json ? reportJson : reportText;
-
-reportHighlights(tracePath, argv.expandTypes ? typesPath : undefined, thresholdDuration, minDuration, minPercentage, importExpressionThreshold)
-  .then(found => exit(found ? 0 : 1))
-  .catch(err => {
-    console.error(`Internal Error: ${err.message}\n${err.stack}`)
-    exit(2);
-});
-
-function throwIfNotFile(path: string): string {
-    if (!fs.existsSync(path) || !fs.statSync(path)?.isFile()) {
-        throw new Error(`${path} is not a file`);
+function parsePayload(raw: string | undefined): WorkerPayload {
+    if (!raw) {
+        throw new Error("analyze-trace-file: missing JSON payload argument");
     }
-    return path;
+    return JSON.parse(raw);
 }

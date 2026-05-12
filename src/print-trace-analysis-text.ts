@@ -1,7 +1,6 @@
 // Copyright (c) Microsoft Corporation.
 // Licensed under the MIT License.
 
-import { assert } from "console";
 import chalk = require("chalk");
 import treeify = require("treeify");
 import fs = require("fs");
@@ -9,11 +8,11 @@ import path = require("path");
 
 import getTypeTree = require("./get-type-tree");
 import { EventSpan, parse } from "./parse-trace-file";
-import { buildHotPathsTree, getEmittedImports, getLineCharMapKey, getNormalizedPositions, getPackageVersion, getRelatedTypes, getTypes, PositionMap, unmangleCamelCase } from "./analyze-trace-utilities";
+import { buildHotPathsTree, getAllRelatedTypes, getEmittedImports, getLineCharMapKey, getNormalizedPositions, getPackageVersion, getRelatedTypes, getRelatedTypesForEvent, PositionMap, RelatedTypes, TypeSources, unmangleCamelCase } from "./analyze-trace-utilities";
 
 export async function reportHighlights(
     tracePath: string,
-    typesPath: string | undefined,
+    typeSources: TypeSources | undefined,
     thresholdDuration: number,
     minDuration: number,
     minPercentage: number,
@@ -35,7 +34,18 @@ export async function reportHighlights(
         console.log();
     }
 
-    const sawHotspots = await printHotStacks(root, importExpressionThreshold, typesPath);
+    const unmatchedEndEvents = parseResult.unmatchedEndEvents;
+    if (unmatchedEndEvents.length) {
+        console.log("Trace contains unmatched end events");
+
+        for (const event of unmatchedEndEvents) {
+            console.log(`< ${event.name}: ${JSON.stringify(event.args)}`);
+        }
+
+        console.log();
+    }
+
+    const sawHotspots = await printHotStacks(root, importExpressionThreshold, typeSources);
     console.log();
     const sawDuplicates = await printDuplicateNodeModules(parseResult.nodeModulePaths);
 
@@ -68,11 +78,11 @@ async function printDuplicateNodeModules(nodeModulePaths: Map<string, string[]>)
     return sawDuplicate;
 }
 
-async function printHotStacks(root: EventSpan, importExpressionThreshold: number, typesPath: string | undefined): Promise<boolean> {
-    const relatedTypes = typesPath ? await getRelatedTypes(root, typesPath, /*leafOnly*/ true) : undefined;
+async function printHotStacks(root: EventSpan, importExpressionThreshold: number, typeSources: TypeSources | undefined): Promise<boolean> {
+    const relatedTypes = typeSources ? await getRelatedTypes(root, typeSources, /*leafOnly*/ true) : undefined;
 
-    const positionMap = await getNormalizedPositions(root, relatedTypes);
-    const tree = await makePrintableTree(root, /*currentFile*/ undefined, positionMap, relatedTypes, importExpressionThreshold);
+    const positionMap = await getNormalizedPositions(root, getAllRelatedTypes(relatedTypes));
+    const tree = await makePrintableTree(root, /*currentFile*/ undefined, positionMap, relatedTypes, typeSources, importExpressionThreshold);
 
     const sawHotspots = Object.entries(tree).length > 0;
     if (sawHotspots) {
@@ -85,18 +95,15 @@ async function printHotStacks(root: EventSpan, importExpressionThreshold: number
     return sawHotspots;
 }
 
-async function makePrintableTree(curr: EventSpan, currentFile: string | undefined, positionMap: PositionMap, relatedTypes: Map<number, object> | undefined, importExpressionThreshold: number): Promise<{}> {
+async function makePrintableTree(curr: EventSpan, currentFile: string | undefined, positionMap: PositionMap, relatedTypes: RelatedTypes | undefined, typeSources: TypeSources | undefined, importExpressionThreshold: number): Promise<{}> {
     let childTree = {};
 
     let showCurrentFile = false;
     if (curr.event?.cat === "check") {
-        const path = curr.event.args!.path;
-        if (path) {
-            showCurrentFile = path !== currentFile;
-            currentFile = path;
-        }
-        else {
-            assert(curr.event?.name !== "checkSourceFile", "checkSourceFile should have a path");
+        const currentEventPath = curr.event.args?.path;
+        if (currentEventPath) {
+            showCurrentFile = currentEventPath !== currentFile;
+            currentFile = currentEventPath;
         }
     }
 
@@ -104,7 +111,7 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
         // Sort slow to fast
         const sortedChildren = curr.children.sort((a, b) => (b.end - b.start) - (a.end - a.start));
         for (const child of sortedChildren) {
-            Object.assign(childTree, await makePrintableTree(child, currentFile, positionMap, relatedTypes, importExpressionThreshold));
+            Object.assign(childTree, await makePrintableTree(child, currentFile, positionMap, relatedTypes, typeSources, importExpressionThreshold));
         }
     }
 
@@ -126,7 +133,7 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
             // case "findSourceFile":
             //     return `Load file ${event.args!.fileName}`;
             case "emitDeclarationFileOrBundle":
-                const dtsPath = event.args.declarationFilePath;
+                const dtsPath = event.args?.declarationFilePath;
                 if (!dtsPath || !fs.existsSync(dtsPath)) {
                     return undefined;
                 }
@@ -145,27 +152,40 @@ async function makePrintableTree(curr: EventSpan, currentFile: string | undefine
                     return undefined;
                 }
             case "checkSourceFile":
+                if (!currentFile) {
+                    return undefined;
+                }
                 return `Check file ${formatPath(currentFile!)}`;
-            case "structuredTypeRelatedTo":
-                const args = event.args!;
-                if (relatedTypes && curr.children.length === 0) {
+            case "structuredTypeRelatedTo": {
+                const args = event.args;
+                if (!args) {
+                    return undefined;
+                }
+                const eventRelatedTypes = getRelatedTypesForEvent(relatedTypes, typeSources, event);
+                if (eventRelatedTypes && curr.children.length === 0) {
                     const typeTree = {
-                        ...getTypeTree(args.sourceId, relatedTypes),
-                        ...getTypeTree(args.targetId, relatedTypes),
+                        ...getTypeTree(args.sourceId, eventRelatedTypes),
+                        ...getTypeTree(args.targetId, eventRelatedTypes),
                     };
                     // Directly modifying childTree is pretty hacky
                     Object.assign(childTree, updateTypeTreePositions(typeTree));
                 }
                 return `Compare types ${args.sourceId} and ${args.targetId}`;
-            case "getVariancesWorker":
-                if (relatedTypes && curr.children.length === 0) {
-                    const typeTree = getTypeTree(event.args!.id, relatedTypes);
+            }
+            case "getVariancesWorker": {
+                if (!event.args) {
+                    return undefined;
+                }
+                const eventRelatedTypes = getRelatedTypesForEvent(relatedTypes, typeSources, event);
+                if (eventRelatedTypes && curr.children.length === 0) {
+                    const typeTree = getTypeTree(event.args!.id, eventRelatedTypes);
                     // Directly modifying childTree is pretty hacky
                     Object.assign(childTree, updateTypeTreePositions(typeTree));
                 }
                 return `Determine variance of type ${event.args!.id}`;
+            }
             default:
-                if (event.cat === "check" && event.args && event.args.pos && event.args.end) {
+                if (event.cat === "check" && event.args && event.args.pos && event.args.end && currentFile) {
                     const currentFileClause = showCurrentFile
                         ? ` in ${formatPath(currentFile!)}`
                         : "";
