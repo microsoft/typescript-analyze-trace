@@ -21,8 +21,8 @@
     "type": "git",
     "url": "git+https://github.com/microsoft/typescript-analyze-trace.git"
   },
-  "main": "./dist/analyze-trace-directory.js",
-  "typings": "./dist/analyze-trace-directory.d.ts",
+  "main": "./dist/analyze-trace-dir.js",
+  "typings": "./dist/analyze-trace-dir.d.ts",
   "bin": {
     "simplify-trace-types": "./bin/simplify-trace-types",
     "print-trace-types": "./bin/print-trace-types",
