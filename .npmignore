@@ -3,5 +3,7 @@ package-lock.json
 CODE_OF_CONDUCT.md
 CONTRIBUTING.md
 *.map
+*.tsbuildinfo
 .github
 azure-pipelines.yml
+build
